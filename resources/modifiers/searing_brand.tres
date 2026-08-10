@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="SpellModifierData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/spell_modifier_data.gd" type="Script" id="1"]
+[ext_resource path="res://assets/placeholders/icons/attachment.svg" type="Texture2D" id="2"]
+[resource]
+script = ExtResource("1")
+modifier_id = "searing_brand"
+display_name = "Searing Brand"
+description = "Adds a burning aftereffect to compatible magic."
+modifier_category = "status"
+rarity = "rare"
+compatible_spell_forms = Array[String]([])
+mana_cost_multiplier = 1.12
+status_effect_override = "burn"
+effect_power_multiplier = 1.25
+placeholder_icon = ExtResource("2")
+debug_color = Color(0.7, 0.4, 1, 1)

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=3 format=3]
+
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[ext_resource path="res://assets/placeholders/icons/fire.svg" type="Texture2D" id="2"]
+
+[resource]
+script = ExtResource("1")
+spell_id = "explosion"
+display_name = "Explosion"
+description = "An expedition-ending fire ultimate. Requires a completely full mana reserve, can be invoked once per expedition, and leaves the caster exhausted."
+primary_element = "fire"
+spell_family = "cataclysm"
+spell_form = "self"
+behavior_type = "explosion"
+base_power = 500.0
+base_mana_cost = 200.0
+base_cast_time_seconds = 1.0
+base_cooldown_seconds = 30.0
+base_range_meters = 60.0
+projectile_speed_meters_per_second = 0.0
+base_area_radius_meters = 60.0
+base_projectile_count = 1
+base_trajectory = "stationary"
+compatible_modifier_categories = Array[String]([])
+placeholder_icon = ExtResource("2")
+debug_color = Color(1, 0.12, 0.01, 1)

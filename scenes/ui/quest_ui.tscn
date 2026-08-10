@@ -1,0 +1,15 @@
+[gd_scene format=3]
+[node name="QuestUI" type="PanelContainer"]
+[node name="Layout" type="VBoxContainer" parent="."]
+[node name="Title" type="Label" parent="Layout"]
+text = "Mara Quill's Contracts"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 26
+[node name="Dialogue" type="Label" parent="Layout"]
+text = "“The marsh keeps secrets. Bring back proof, not stories.”"
+autowrap_mode = 2
+[node name="Scroll" type="ScrollContainer" parent="Layout"]
+size_flags_vertical = 3
+[node name="QuestRows" type="VBoxContainer" parent="Layout/Scroll"]
+unique_name_in_owner = true
+size_flags_horizontal = 3

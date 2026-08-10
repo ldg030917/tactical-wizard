@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/skill_data.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+skill_id = "accuracy"
+display_name = "Runic Precision"
+description = "7% stronger spell power per rank"
+maximum_rank = 3
+benefit_per_rank = 7.0
+benefit_mode = "percent"

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/item_data.gd" type="Script" id="1"]
+[ext_resource path="res://assets/placeholders/icons/ticket.svg" type="Texture2D" id="2"]
+[ext_resource path="res://scenes/spells/spell_visual_placeholder.tscn" type="PackedScene" id="3"]
+[resource]
+script = ExtResource("1")
+item_id = "walpurgis_ticket"
+display_name = "Walpurgis Ticket"
+description = "A stamped invitation to a forbidden midnight market. Extremely valuable."
+category = "ticket"
+rarity = "epic"
+inventory_slots = 1
+weight_kg = 0.02
+value_crowns = 1250
+placeholder_icon = ExtResource("2")
+placeholder_world_model = ExtResource("3")
+debug_color = Color(1, 0.76, 0.17, 1)

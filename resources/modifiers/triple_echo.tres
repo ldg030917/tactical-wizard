@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="SpellModifierData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/spell_modifier_data.gd" type="Script" id="1"]
+[ext_resource path="res://assets/placeholders/icons/attachment.svg" type="Texture2D" id="2"]
+[resource]
+script = ExtResource("1")
+modifier_id = "triple_echo"
+display_name = "Triple Echo"
+description = "Creates two additional projectiles in a wider fan."
+modifier_category = "split"
+rarity = "rare"
+compatible_spell_forms = Array[String](["projectile"])
+damage_multiplier = 0.7
+mana_cost_multiplier = 1.38
+projectile_count_add = 2
+placeholder_icon = ExtResource("2")
+debug_color = Color(0.7, 0.4, 1, 1)

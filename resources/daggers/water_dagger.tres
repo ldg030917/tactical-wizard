@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="DaggerData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/dagger_data.gd" type="Script" id="1"]
+[ext_resource path="res://assets/placeholders/icons/water.svg" type="Texture2D" id="2"]
+[resource]
+script = ExtResource("1")
+dagger_id = "water_dagger"
+display_name = "Tideglass Dagger"
+primary_element = "water"
+damage = 23.0
+attack_speed = 1.5
+stamina_cost = 17.0
+status_effect = "slow"
+placeholder_icon = ExtResource("2")
+debug_color = Color(0.2, 0.75, 1, 1)

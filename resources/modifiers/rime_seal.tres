@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="SpellModifierData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/spell_modifier_data.gd" type="Script" id="1"]
+[ext_resource path="res://assets/placeholders/icons/attachment.svg" type="Texture2D" id="2"]
+[resource]
+script = ExtResource("1")
+modifier_id = "rime_seal"
+display_name = "Rime Seal"
+description = "Adds a chilling slow aftereffect."
+modifier_category = "status"
+rarity = "rare"
+compatible_spell_forms = Array[String]([])
+mana_cost_multiplier = 1.14
+status_effect_override = "slow"
+effect_power_multiplier = 1.15
+placeholder_icon = ExtResource("2")
+debug_color = Color(0.7, 0.4, 1, 1)

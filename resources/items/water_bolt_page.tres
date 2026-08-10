@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/item_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/spells/water_bolt.tres" type="Resource" id="2"]
+[ext_resource path="res://assets/placeholders/icons/water.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+item_id = "water_bolt_page"
+display_name = "Formula Page: Tidal Bolt"
+description = "Water - Projectile - Impact. A completed page installable at the Base."
+category = "spell"
+rarity = "common"
+weight_kg = 0.1
+value_crowns = 95
+base_spell = ExtResource("2")
+primary_element = "water"
+item_family = "water"
+placeholder_icon = ExtResource("3")
+debug_color = Color(0.2, 0.75, 1, 1)

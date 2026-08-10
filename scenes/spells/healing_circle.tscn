@@ -1,0 +1,39 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource path="res://scripts/spells/healing_circle.gd" type="Script" id="1"]
+[sub_resource type="CylinderShape3D" id="CircleShape"]
+radius = 1.0
+height = 0.25
+[sub_resource type="CylinderMesh" id="CircleMesh"]
+top_radius = 0.5
+bottom_radius = 0.5
+height = 0.04
+
+[node name="HealingCircle" type="Area3D"]
+script = ExtResource("1")
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CircleShape")
+
+[node name="HealingZoneController" type="Node" parent="."]
+
+[node name="Visual" type="Node3D" parent="."]
+unique_name_in_owner = true
+
+[node name="Boundary" type="MeshInstance3D" parent="Visual"]
+unique_name_in_owner = true
+mesh = SubResource("CircleMesh")
+
+[node name="RuneNorth" type="MeshInstance3D" parent="Visual"]
+unique_name_in_owner = true
+position = Vector3(0, 0.08, -0.9)
+scale = Vector3(0.18, 0.08, 0.45)
+mesh = SubResource("CircleMesh")
+
+[node name="RuneSouth" type="MeshInstance3D" parent="Visual"]
+unique_name_in_owner = true
+position = Vector3(0, 0.08, 0.9)
+scale = Vector3(0.18, 0.08, 0.45)
+mesh = SubResource("CircleMesh")

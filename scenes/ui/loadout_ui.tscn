@@ -1,0 +1,15 @@
+[gd_scene format=3]
+[node name="LoadoutUI" type="PanelContainer"]
+[node name="Layout" type="VBoxContainer" parent="."]
+[node name="Title" type="Label" parent="Layout"]
+text = "Mage Equipment Loadout"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 26
+[node name="Description" type="Label" parent="Layout"]
+text = "Equipped gear enters the raid and is lost on death."
+autowrap_mode = 2
+[node name="Scroll" type="ScrollContainer" parent="Layout"]
+size_flags_vertical = 3
+[node name="LoadoutRows" type="VBoxContainer" parent="Layout/Scroll"]
+unique_name_in_owner = true
+size_flags_horizontal = 3

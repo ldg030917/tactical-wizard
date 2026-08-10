@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="StarterPackageData" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/starter_package_data.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+package_id = "water_recovery"
+display_name = "Basic Water Package"
+description = "A cheap replacement grimoire, Water formula, Water dagger, basic focus, armor, and healing potion."
+currency_cost = 120
+item_ids = Array[String](["apprentice_grimoire", "apprentice_wand", "water_bolt_page", "water_dagger", "cloth_armor", "health_potion"])
+quantities = Array[int]([1, 1, 1, 1, 1, 1])

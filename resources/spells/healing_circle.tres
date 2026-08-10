@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BaseSpellData" format=3 uid="uid://bwy6ruadrvnuq"]
+
+[ext_resource type="Script" uid="uid://cjmbi81to30oy" path="res://scripts/data/base_spell_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/spells/healing_circle.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://icon.svg" id="3"]
+
+[resource]
+script = ExtResource("1")
+spell_id = "healing_circle"
+display_name = "Verdant Refuge"
+description = "Places a persistent restorative circle that heals its caster while they remain inside."
+primary_element = "neutral"
+spell_family = "restoration"
+spell_form = "area"
+base_power = 44.0
+base_mana_cost = 42.0
+base_cast_time_seconds = 0.8
+base_cooldown_seconds = 8.0
+base_range_meters = 6.0
+projectile_speed_meters_per_second = 0.0
+base_area_radius_meters = 2.2
+base_trajectory = "stationary"
+effect_duration_seconds = 8.0
+compatible_modifier_categories = Array[String](["range", "area"])
+placeholder_icon = ExtResource("3")
+area_scene = ExtResource("2")
+debug_color = Color(0.25, 1, 0.54, 1)

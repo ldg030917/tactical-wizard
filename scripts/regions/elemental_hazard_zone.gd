@@ -1,0 +1,35 @@
+class_name ElementalHazardZone
+extends Area3D
+
+@export_enum("fire", "water") var hazard_element: String = "fire"
+@export_range(0.0, 50.0, 0.5) var power_per_second: float = 7.0
+@export_range(0.1, 1.0, 0.05) var water_slow_multiplier: float = 0.5
+@export_range(1.0, 20.0, 0.5, "suffix:m") var radius: float = 3.0
+
+var affected_players: Array[PlayerController] = []
+
+func _ready() -> void:
+	body_entered.connect(_on_body_entered)
+	body_exited.connect(_on_body_exited)
+	var shape := $CollisionShape3D.shape as CylinderShape3D
+	shape.radius = radius
+	$Visual.scale = Vector3(radius, 0.05, radius)
+	$Visual.material_override = VisualFactory.material(ElementSystem.color(hazard_element), 1.4, true)
+
+func _physics_process(delta: float) -> void:
+	for player: PlayerController in affected_players:
+		if not is_instance_valid(player) or player.dead:
+			continue
+		if hazard_element == "fire":
+			player.take_damage(power_per_second * delta, global_position, 0.0, "fire")
+			player.apply_status("burn", 0.4, power_per_second * 0.35)
+		else:
+			player.apply_status("slow", 0.35, 1.0 - water_slow_multiplier)
+
+func _on_body_entered(body: Node3D) -> void:
+	if body is PlayerController and body not in affected_players:
+		affected_players.append(body)
+
+func _on_body_exited(body: Node3D) -> void:
+	if body is PlayerController:
+		affected_players.erase(body)

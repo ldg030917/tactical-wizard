@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="QuestData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/quest_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/items/mod_increased_range.tres" type="Resource" id="2"]
+[resource]
+script = ExtResource("1")
+quest_id = "ember_sample"
+display_title = "Ash That Still Breathes"
+description = "Recover one Living Ash Essence from the creatures of the Ashen Village."
+quest_npc_id = "archivist_sable"
+sort_order = 1
+objective_type = "item"
+target_id = "ash_essence"
+required_amount = 1
+reward_currency = 240
+reward_item = ExtResource("2")
+reward_skill_points = 1

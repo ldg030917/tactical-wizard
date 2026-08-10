@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SpellbookData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/spellbook_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/spells/spell_visual_placeholder.tscn" type="PackedScene" id="2"]
+[ext_resource path="res://icon.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+spellbook_id = "apprentice_grimoire"
+display_name = "Ashbound Grimoire"
+description = "A durable three-page field grimoire used by village wardens."
+number_of_pages = 3
+maximum_modifiers_per_page = 2
+compatible_spell_forms = Array[String](["projectile", "area"])
+casting_speed_multiplier = 1.0
+mana_efficiency_multiplier = 1.0
+inventory_slots = 3
+weight_kg = 1.4
+placeholder_visual_scene = ExtResource("2")
+placeholder_icon = ExtResource("3")
+debug_color = Color(0.38, 0.19, 0.5, 1)

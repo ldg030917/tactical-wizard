@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/item_data.gd" type="Script" id="1"]
+[ext_resource path="res://icon.svg" type="Texture2D" id="2"]
+[ext_resource path="res://scenes/items/loot_pickup.tscn" type="PackedScene" id="3"]
+[resource]
+script = ExtResource("1")
+item_id = "muzzle_brake"
+display_name = "Reed Brake"
+description = "Reduces recoil and extends effective range."
+category = "attachment"
+rarity = "uncommon"
+weight_kg = 0.15
+value_crowns = 125
+attachment_type = "muzzle"
+recoil_multiplier = 0.7
+range_multiplier = 1.08
+placeholder_icon = ExtResource("2")
+placeholder_world_model = ExtResource("3")
+debug_color = Color(0.47, 0.47, 0.47, 1)

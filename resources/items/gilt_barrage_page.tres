@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/item_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/spells/gilt_barrage.tres" type="Resource" id="2"]
+[ext_resource path="res://assets/placeholders/icons/neutral.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+item_id = "gilt_barrage_page"
+display_name = "Formula Page: Gilt Barrage"
+description = "Neutral - four-projectile arcane fan."
+category = "spell"
+value_crowns = 120
+base_spell = ExtResource("2")
+primary_element = "neutral"
+item_family = "arcane"
+placeholder_icon = ExtResource("3")
+debug_color = Color(0.98, 0.8, 0.32, 1)

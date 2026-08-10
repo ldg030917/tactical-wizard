@@ -1,0 +1,62 @@
+[gd_scene load_steps=8 format=3]
+[sub_resource type="StandardMaterial3D" id="CoalMat"]
+albedo_color = Color(0.12, 0.08, 0.07, 1)
+roughness = 0.92
+[sub_resource type="StandardMaterial3D" id="EmberMat"]
+albedo_color = Color(1, 0.22, 0.02, 1)
+emission_enabled = true
+emission = Color(1, 0.16, 0.01, 1)
+emission_energy_multiplier = 2.8
+[sub_resource type="SphereMesh" id="Body"]
+material = SubResource("CoalMat")
+radius = 0.38
+height = 0.72
+[sub_resource type="SphereMesh" id="Head"]
+material = SubResource("CoalMat")
+radius = 0.26
+height = 0.45
+[sub_resource type="BoxMesh" id="Snout"]
+material = SubResource("CoalMat")
+size = Vector3(0.3, 0.16, 0.38)
+[sub_resource type="CylinderMesh" id="Leg"]
+material = SubResource("CoalMat")
+top_radius = 0.07
+bottom_radius = 0.08
+height = 0.46
+[sub_resource type="SphereMesh" id="Ember"]
+material = SubResource("EmberMat")
+radius = 0.07
+height = 0.14
+[node name="PlaceholderCinderHoundModel" type="Node3D"]
+[node name="CoalBody" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.68, 0.06)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("Body")
+[node name="Head" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.77, -0.45)
+mesh = SubResource("Head")
+[node name="Snout" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.7, -0.72)
+mesh = SubResource("Snout")
+[node name="FrontLeftLeg" type="MeshInstance3D" parent="."]
+position = Vector3(-0.22, 0.28, -0.22)
+mesh = SubResource("Leg")
+[node name="FrontRightLeg" type="MeshInstance3D" parent="."]
+position = Vector3(0.22, 0.28, -0.22)
+mesh = SubResource("Leg")
+[node name="RearLeftLeg" type="MeshInstance3D" parent="."]
+position = Vector3(-0.22, 0.28, 0.3)
+mesh = SubResource("Leg")
+[node name="RearRightLeg" type="MeshInstance3D" parent="."]
+position = Vector3(0.22, 0.28, 0.3)
+mesh = SubResource("Leg")
+[node name="EmberEyeLeft" type="MeshInstance3D" parent="."]
+position = Vector3(-0.1, 0.86, -0.67)
+mesh = SubResource("Ember")
+[node name="EmberEyeRight" type="MeshInstance3D" parent="."]
+position = Vector3(0.1, 0.86, -0.67)
+mesh = SubResource("Ember")
+[node name="EmberSpine" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.02, 0.12)
+scale = Vector3(1.8, 0.6, 1)
+mesh = SubResource("Ember")

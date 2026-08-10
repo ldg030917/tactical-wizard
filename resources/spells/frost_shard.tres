@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/spells/spell_projectile.tscn" type="PackedScene" id="2"]
+[ext_resource path="res://assets/placeholders/icons/water.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+spell_id = "frost_shard"
+display_name = "Frost Shard"
+description = "A cheap Ice-family shard that strongly slows its target."
+primary_element = "water"
+spell_family = "ice"
+base_power = 21.0
+base_mana_cost = 12.0
+base_cast_time_seconds = 0.2
+base_cooldown_seconds = 0.45
+base_range_meters = 16.0
+projectile_speed_meters_per_second = 21.0
+base_area_radius_meters = 0.4
+status_effect = "slow"
+effect_duration_seconds = 3.0
+effect_power = 0.45
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "split", "status"])
+placeholder_icon = ExtResource("3")
+projectile_scene = ExtResource("2")
+debug_color = Color(0.63, 0.92, 1, 1)

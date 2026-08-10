@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/item_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/spells/arcane_bolt.tres" type="Resource" id="2"]
+[ext_resource path="res://assets/placeholders/icons/neutral.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+item_id = "arcane_bolt_page"
+display_name = "Formula Page: Gilt Arc"
+description = "Neutral - Projectile - Arcane. A completed page installable at the Base."
+category = "spell"
+rarity = "common"
+weight_kg = 0.1
+value_crowns = 90
+base_spell = ExtResource("2")
+primary_element = "neutral"
+item_family = "arcane"
+placeholder_icon = ExtResource("3")
+debug_color = Color(0.96, 0.86, 0.56, 1)

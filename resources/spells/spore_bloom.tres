@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+spell_id = "spore_bloom"
+display_name = "Spore Bloom"
+description = "Cultivates a poisonous bloom that releases repeated spore clouds."
+primary_element = "grass"
+spell_family = "spore"
+spell_form = "area"
+behavior_type = "damage_zone"
+base_power = 18.0
+base_mana_cost = 34.0
+base_cast_time_seconds = 0.55
+base_cooldown_seconds = 5
+base_range_meters = 14.0
+projectile_speed_meters_per_second = 0.0
+base_area_radius_meters = 4.4
+status_effect = "poison"
+effect_duration_seconds = 7
+effect_power = 6
+field_duration_seconds = 7
+secondary_power = 0
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "area", "split", "status", "family", "utility", "duration", "collision", "targeting"])
+debug_color = Color(0.34, 0.82, 0.16, 1)

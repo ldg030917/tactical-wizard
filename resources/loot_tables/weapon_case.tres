@@ -1,0 +1,57 @@
+[gd_resource type="Resource" script_class="LootTableData" format=3 uid="uid://v2qtjigdhplw"]
+
+[ext_resource type="Script" uid="uid://8o2fq86yv4r1" path="res://scripts/data/loot_table_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://cc7isq678girl" path="res://scripts/data/loot_entry_data.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/items/ammo_light.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/items/ammo_shell.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/items/auto_carbine.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/items/scattergun.tres" id="6"]
+[ext_resource type="Resource" path="res://resources/items/red_dot.tres" id="7"]
+[ext_resource type="Resource" path="res://resources/items/muzzle_brake.tres" id="8"]
+[ext_resource type="Resource" path="res://resources/items/steady_grip.tres" id="9"]
+
+[sub_resource type="Resource" id="E1"]
+script = ExtResource("2")
+item = ExtResource("3")
+selection_weight = 5.0
+minimum_quantity = 10
+maximum_quantity = 30
+
+[sub_resource type="Resource" id="E2"]
+script = ExtResource("2")
+item = ExtResource("4")
+selection_weight = 3.0
+minimum_quantity = 4
+maximum_quantity = 10
+
+[sub_resource type="Resource" id="E3"]
+script = ExtResource("2")
+item = ExtResource("5")
+selection_weight = 0.7
+
+[sub_resource type="Resource" id="E4"]
+script = ExtResource("2")
+item = ExtResource("6")
+selection_weight = 0.4
+
+[sub_resource type="Resource" id="E5"]
+script = ExtResource("2")
+item = ExtResource("7")
+selection_weight = 1.5
+
+[sub_resource type="Resource" id="E6"]
+script = ExtResource("2")
+item = ExtResource("8")
+selection_weight = 1.2
+
+[sub_resource type="Resource" id="E7"]
+script = ExtResource("2")
+item = ExtResource("9")
+selection_weight = 1.6
+
+[resource]
+script = ExtResource("1")
+table_id = "weapon_case"
+display_name = "Weapon Cases"
+minimum_rolls = 2
+entries = Array[ExtResource("2")]([SubResource("E1"), SubResource("E2"), SubResource("E3"), SubResource("E4"), SubResource("E5"), SubResource("E6"), SubResource("E7")])

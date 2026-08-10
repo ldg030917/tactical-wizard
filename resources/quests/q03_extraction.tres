@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="QuestData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/quest_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/items/mana_ring.tres" type="Resource" id="2"]
+[resource]
+script = ExtResource("1")
+quest_id = "waygate_return"
+display_title = "A Road Through Ash"
+description = "Survive one expedition and return through the Ashen Waygate."
+quest_npc_id = "archivist_sable"
+sort_order = 3
+objective_type = "extract"
+target_id = "success"
+required_amount = 1
+prerequisite_quest_id = "cinder_hunt"
+reward_currency = 420
+reward_item = ExtResource("2")
+reward_skill_points = 1

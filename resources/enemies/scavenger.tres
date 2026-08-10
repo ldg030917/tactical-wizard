@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=7 format=3]
+[ext_resource path="res://scripts/data/enemy_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/weapons/basic_pistol.tres" type="Resource" id="2"]
+[ext_resource path="res://resources/loot_tables/enemy_basic.tres" type="Resource" id="3"]
+[ext_resource path="res://scenes/enemies/visuals/scavenger_visual.tscn" type="PackedScene" id="4"]
+[resource]
+script = ExtResource("1")
+enemy_id = "scavenger"
+display_name = "Causeway Scavenger"
+behavior_type = "scavenger"
+difficulty_tier = 1
+maximum_health = 58.0
+movement_speed = 2.65
+detection_range_meters = 12.0
+hearing_range_meters = 16.0
+attack_range_meters = 9.5
+attack_damage = 9.0
+attack_interval_seconds = 1.25
+weapon = ExtResource("2")
+loot_table = ExtResource("3")
+visual_scene = ExtResource("4")
+debug_color = Color(0.64, 0.44, 0.31, 1)

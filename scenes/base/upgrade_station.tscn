@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource path="res://scenes/base/station_base.tscn" type="PackedScene" id="1"]
+[ext_resource path="res://resources/upgrades/storage.tres" type="Resource" id="2"]
+[node name="UpgradeStation" instance=ExtResource("1")]
+station_id = "upgrades"
+display_name = "Refuge Upgrade Plinth"
+interaction_description = "Improve the refuge at"
+linked_upgrade = ExtResource("2")

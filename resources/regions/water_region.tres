@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="RegionData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/region_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/regions/water_region.tscn" type="PackedScene" id="2"]
+[resource]
+script = ExtResource("1")
+region_id = "water_region"
+display_name = "Flooded Archive"
+description = "Flooded halls slow movement. Water loot advances into Ice and Lightning families."
+primary_element = "water"
+scene = ExtResource("2")
+difficulty_tier = 1
+hazard_type = "water_slow"
+hazard_power = 0.38
+visual_color = Color(0.18, 0.67, 0.92, 1)

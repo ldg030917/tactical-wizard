@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/item_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/spells/magma_basin.tres" type="Resource" id="2"]
+[ext_resource path="res://assets/placeholders/icons/fire.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+item_id = "magma_basin_page"
+display_name = "Magma Basin"
+description = "Creates a molten basin that repeatedly damages and burns enemies."
+category = "spell"
+rarity = "uncommon"
+value_crowns = 264
+base_spell = ExtResource("2")
+primary_element = "fire"
+item_family = "magma"
+placeholder_icon = ExtResource("3")
+debug_color = Color(0.95, 0.12, 0.01, 1)

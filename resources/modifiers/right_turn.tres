@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SpellModifierData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/spell_modifier_data.gd" type="Script" id="1"]
+[ext_resource path="res://assets/placeholders/icons/attachment.svg" type="Texture2D" id="2"]
+[resource]
+script = ExtResource("1")
+modifier_id = "right_turn"
+display_name = "Right-Hand Vector"
+description = "Curves toward the designated destination from the right side of cover."
+modifier_category = "trajectory"
+rarity = "uncommon"
+compatible_spell_forms = Array[String](["projectile"])
+mana_cost_multiplier = 1.08
+trajectory_override = "right_turn"
+placeholder_icon = ExtResource("2")

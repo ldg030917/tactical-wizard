@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/spells/spell_projectile.tscn" type="PackedScene" id="2"]
+[ext_resource path="res://assets/placeholders/icons/neutral.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+spell_id = "arcane_bolt"
+display_name = "Gilt Arc"
+description = "A dependable Neutral projectile with no elemental advantage or weakness."
+primary_element = "neutral"
+spell_family = "arcane"
+base_power = 26.0
+base_mana_cost = 15.0
+base_cast_time_seconds = 0.28
+base_cooldown_seconds = 0.55
+base_range_meters = 16.0
+projectile_speed_meters_per_second = 18.0
+base_area_radius_meters = 0.5
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "split"])
+placeholder_icon = ExtResource("3")
+projectile_scene = ExtResource("2")
+debug_color = Color(0.96, 0.86, 0.56, 1)

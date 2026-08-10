@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/spells/spell_projectile.tscn" type="PackedScene" id="2"]
+[ext_resource path="res://assets/placeholders/icons/fire.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+spell_id = "cinder_mortar"
+display_name = "Cinder Mortar"
+description = "A heavy high-lob Fire projectile that bursts behind cover."
+primary_element = "fire"
+spell_family = "explosion"
+base_power = 48.0
+base_mana_cost = 38.0
+base_cast_time_seconds = 0.8
+base_cooldown_seconds = 2.5
+base_range_meters = 19.0
+projectile_speed_meters_per_second = 10.0
+base_area_radius_meters = 2.5
+base_trajectory = "high_lob"
+status_effect = "burn"
+effect_duration_seconds = 5.0
+effect_power = 4.0
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "area", "status"])
+placeholder_icon = ExtResource("3")
+projectile_scene = ExtResource("2")
+debug_color = Color(0.95, 0.16, 0.02, 1)

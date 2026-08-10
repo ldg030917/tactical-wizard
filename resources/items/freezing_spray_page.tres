@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/item_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/spells/freezing_spray.tres" type="Resource" id="2"]
+[ext_resource path="res://assets/placeholders/icons/water.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+item_id = "freezing_spray_page"
+display_name = "Freezing Spray"
+description = "Sprays freezing mist in a cone, chilling every enemy it touches."
+category = "spell"
+rarity = "uncommon"
+value_crowns = 228
+base_spell = ExtResource("2")
+primary_element = "water"
+item_family = "ice"
+placeholder_icon = ExtResource("3")
+debug_color = Color(0.25, 0.83, 1, 1)

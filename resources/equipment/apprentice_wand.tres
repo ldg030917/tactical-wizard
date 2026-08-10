@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="FocusData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/focus_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/spells/spell_visual_placeholder.tscn" type="PackedScene" id="2"]
+[ext_resource path="res://icon.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+focus_id = "apprentice_wand"
+display_name = "Rowan Spark-Wand"
+description = "A neutral field focus with stable projectile shaping."
+damage_multiplier = 1.0
+casting_speed_multiplier = 1.0
+mana_efficiency_multiplier = 1.0
+projectile_stability_multiplier = 1.0
+maximum_modifier_complexity = 4
+placeholder_visual_scene = ExtResource("2")
+placeholder_icon = ExtResource("3")

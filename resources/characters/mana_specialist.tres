@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="CharacterData" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/character_data.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+character_id = "mana_specialist"
+display_name = "Mana Specialist"
+description = "Higher mana and regeneration with no class or elemental lock."
+mana_multiplier = 1.15
+mana_regeneration_multiplier = 1.18

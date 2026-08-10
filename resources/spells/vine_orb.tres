@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/spells/spell_projectile.tscn" type="PackedScene" id="2"]
+[ext_resource path="res://assets/placeholders/icons/grass.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+spell_id = "vine_orb"
+display_name = "Vine Orb"
+description = "A large Grass projectile that spreads poisonous vines on impact."
+primary_element = "grass"
+spell_family = "vine"
+base_power = 28.0
+base_mana_cost = 30.0
+base_cast_time_seconds = 0.58
+base_cooldown_seconds = 1.8
+base_range_meters = 15.0
+projectile_speed_meters_per_second = 11.0
+base_area_radius_meters = 2.2
+status_effect = "poison"
+effect_duration_seconds = 4.5
+effect_power = 2.0
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "area", "status"])
+placeholder_icon = ExtResource("3")
+projectile_scene = ExtResource("2")
+debug_color = Color(0.18, 0.72, 0.3, 1)

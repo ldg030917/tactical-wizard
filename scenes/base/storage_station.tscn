@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource path="res://scenes/base/station_base.tscn" type="PackedScene" id="1"]
+[ext_resource path="res://resources/upgrades/storage.tres" type="Resource" id="2"]
+[node name="StorageStation" instance=ExtResource("1")]
+station_id = "stash"
+display_name = "Persistent Stash"
+interaction_description = "Open"
+linked_upgrade = ExtResource("2")

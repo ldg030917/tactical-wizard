@@ -1,0 +1,67 @@
+[gd_scene load_steps=13 format=3]
+[sub_resource type="StandardMaterial3D" id="WallMat"]
+albedo_color = Color(0.34, 0.4, 0.42, 1)
+roughness = 0.88
+[sub_resource type="StandardMaterial3D" id="FloorMat"]
+albedo_color = Color(0.23, 0.27, 0.28, 1)
+roughness = 0.95
+[sub_resource type="BoxMesh" id="NorthWallMesh"]
+material = SubResource("WallMat")
+size = Vector3(9, 2.3, 0.42)
+[sub_resource type="BoxShape3D" id="NorthWallShape"]
+size = Vector3(9, 2.3, 0.42)
+[sub_resource type="BoxMesh" id="SideWallMesh"]
+material = SubResource("WallMat")
+size = Vector3(0.42, 2.3, 7)
+[sub_resource type="BoxShape3D" id="SideWallShape"]
+size = Vector3(0.42, 2.3, 7)
+[sub_resource type="BoxMesh" id="DoorSideMesh"]
+material = SubResource("WallMat")
+size = Vector3(0.42, 2.3, 2.3)
+[sub_resource type="BoxShape3D" id="DoorSideShape"]
+size = Vector3(0.42, 2.3, 2.3)
+[sub_resource type="BoxMesh" id="FloorMesh"]
+material = SubResource("FloorMat")
+size = Vector3(8.5, 0.06, 6.5)
+[node name="OpenBuilding" type="Node3D"]
+[node name="Walls" type="Node3D" parent="."]
+[node name="NorthWall" type="StaticBody3D" parent="Walls"]
+position = Vector3(0, 1.15, -3.5)
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/NorthWall"]
+shape = SubResource("NorthWallShape")
+[node name="Visual" type="MeshInstance3D" parent="Walls/NorthWall"]
+mesh = SubResource("NorthWallMesh")
+[node name="SouthWall" type="StaticBody3D" parent="Walls"]
+position = Vector3(0, 1.15, 3.5)
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/SouthWall"]
+shape = SubResource("NorthWallShape")
+[node name="Visual" type="MeshInstance3D" parent="Walls/SouthWall"]
+mesh = SubResource("NorthWallMesh")
+[node name="WestWall" type="StaticBody3D" parent="Walls"]
+position = Vector3(-4.5, 1.15, 0)
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/WestWall"]
+shape = SubResource("SideWallShape")
+[node name="Visual" type="MeshInstance3D" parent="Walls/WestWall"]
+mesh = SubResource("SideWallMesh")
+[node name="EastWall_North" type="StaticBody3D" parent="Walls"]
+position = Vector3(4.5, 1.15, -2.35)
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/EastWall_North"]
+shape = SubResource("DoorSideShape")
+[node name="Visual" type="MeshInstance3D" parent="Walls/EastWall_North"]
+mesh = SubResource("DoorSideMesh")
+[node name="EastWall_South" type="StaticBody3D" parent="Walls"]
+position = Vector3(4.5, 1.15, 2.35)
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/EastWall_South"]
+shape = SubResource("DoorSideShape")
+[node name="Visual" type="MeshInstance3D" parent="Walls/EastWall_South"]
+mesh = SubResource("DoorSideMesh")
+[node name="Floor" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.03, 0)
+mesh = SubResource("FloorMesh")
+[node name="Visual" type="Node3D" parent="."]
+[node name="ReplaceBuildingMeshesHere" type="Marker3D" parent="Visual"]

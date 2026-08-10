@@ -1,0 +1,12 @@
+# Guideline validation suites
+
+The tests are separated by responsibility so a failure identifies the affected layer.
+
+- `guideline_feature_matrix.gd` lists every numbered section in the refined 90-section development and UI guideline. Each section is classified as tested, partially implemented, deliberately deferred, or a design rule. Optional polish and expansion content is never reported as completed.
+- `guideline_compliance_test.tscn` validates the content, UI, combat, element, equipment, region, enemy, extraction, and architecture requirements represented by the current prototype. It fails if any testable guideline section has no assertion.
+- `explosion_spell_test.tscn` validates Explosion's fire identity, sealed/no-attachment formula, full-mana and once-per-expedition restrictions, exact one-second charge, bundled cutscene, full-screen blast, forward-only 500 damage, structure and wall destruction with boundary preservation, loot deletion, and three-second exhaustion.
+- `editor_structure_test.tscn` validates saved resources and scene hierarchy, including explicit export-catalog coverage for all 40 starting spell pages and formulas, 20 additional attachments, all four element shaders, projectile rings/trail/light nodes, the fixed Neutral entry, three gateways per region, navigation data, and the five-second Grass wall configuration.
+- `smoke_test.tscn` exercises the complete playable loop: all 40 starting spells and 20 additional attachments compiling, partial-mana casting, Base casting, proximity-open/close facility screens, fixed workshop sockets, integrated equipment/storage, carried in-raid spell configuration, crafting, Neutral deployment, connected-region travel, seven Water pools applying an exact 50% slow, sight-triggered melee pursuit and attack, five-second Grass walls, direct runtime casts for flamethrower, magma, puddle vulnerability, roots, plant wall, blink, and ward mechanics, combat, looting, extraction, death loss, secure storage, and persistence.
+- `render_capture.tscn` captures the start screen, Base, Neutral raid, an animated Fire/Water/Grass/Neutral spell gallery, Water gimmicks, and the Grass-region wall layout for visual review.
+
+Deferred and partial entries are documented in the feature matrix with their guideline-derived reason. Adding a feature requires changing its classification and adding an executable assertion before the compliance suite will accept it as complete.

@@ -1,0 +1,28 @@
+[gd_scene load_steps=5 format=3]
+[ext_resource path="res://scripts/spawn_points/player_spawn_point.gd" type="Script" id="1"]
+[sub_resource type="StandardMaterial3D" id="MarkerMat"]
+transparency = 1
+albedo_color = Color(0.2, 0.7, 1, 0.3)
+shading_mode = 0
+[sub_resource type="CylinderMesh" id="MarkerMesh"]
+material = SubResource("MarkerMat")
+top_radius = 0.8
+bottom_radius = 0.8
+height = 0.08
+[sub_resource type="BoxMesh" id="ArrowMesh"]
+material = SubResource("MarkerMat")
+size = Vector3(0.25, 0.15, 1.2)
+[node name="PlayerSpawnPoint" type="Marker3D"]
+script = ExtResource("1")
+[node name="DebugVisual" type="Node3D" parent="."]
+[node name="SpawnRadius" type="MeshInstance3D" parent="DebugVisual"]
+mesh = SubResource("MarkerMesh")
+[node name="FacingArrow" type="MeshInstance3D" parent="DebugVisual"]
+position = Vector3(0, 0.15, -0.7)
+mesh = SubResource("ArrowMesh")
+[node name="SpawnLabel" type="Label3D" parent="."]
+position = Vector3(0, 1.1, 0)
+font_size = 24
+billboard = 1
+no_depth_test = true
+text = "PLAYER SPAWN"

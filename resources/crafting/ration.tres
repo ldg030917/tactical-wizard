@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CraftingRecipeData" load_steps=8 format=3]
+[ext_resource path="res://scripts/data/crafting_recipe_data.gd" type="Script" id="1"]
+[ext_resource path="res://scripts/data/craft_ingredient_data.gd" type="Script" id="2"]
+[ext_resource path="res://resources/items/ration.tres" type="Resource" id="3"]
+[ext_resource path="res://resources/items/canteen.tres" type="Resource" id="4"]
+[sub_resource type="Resource" id="I1"]
+script = ExtResource("2")
+item = ExtResource("3")
+[sub_resource type="Resource" id="I2"]
+script = ExtResource("2")
+item = ExtResource("4")
+[resource]
+script = ExtResource("1")
+recipe_id = "ration"
+display_name = "Prepare Seed Rations"
+description = "Stretch provisions into three sealed field meals."
+ingredients = Array[CraftIngredientData]([SubResource("I1"), SubResource("I2")])
+output_item = ExtResource("3")
+output_quantity = 3
+required_workbench_level = 1
+currency_cost = 8

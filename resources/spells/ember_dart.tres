@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/spells/spell_projectile.tscn" type="PackedScene" id="2"]
+[ext_resource path="res://assets/placeholders/icons/fire.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+spell_id = "ember_dart"
+display_name = "Ember Dart"
+description = "A low-cost, rapid Fire needle for sustained pressure."
+primary_element = "fire"
+spell_family = "fire"
+base_power = 18.0
+base_mana_cost = 9.0
+base_cast_time_seconds = 0.12
+base_cooldown_seconds = 0.25
+base_range_meters = 18.0
+projectile_speed_meters_per_second = 24.0
+base_area_radius_meters = 0.35
+status_effect = "burn"
+effect_duration_seconds = 2.0
+effect_power = 1.0
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "split", "status"])
+placeholder_icon = ExtResource("3")
+projectile_scene = ExtResource("2")
+debug_color = Color(1, 0.42, 0.12, 1)

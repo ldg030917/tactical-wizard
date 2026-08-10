@@ -1,0 +1,58 @@
+[gd_scene load_steps=10 format=3]
+[sub_resource type="StandardMaterial3D" id="RobeMat"]
+albedo_color = Color(0.22, 0.08, 0.27, 1)
+roughness = 0.84
+[sub_resource type="StandardMaterial3D" id="AshMat"]
+albedo_color = Color(0.5, 0.42, 0.38, 1)
+[sub_resource type="StandardMaterial3D" id="EmberMat"]
+albedo_color = Color(1, 0.23, 0.04, 1)
+emission_enabled = true
+emission = Color(1, 0.18, 0.02, 1)
+emission_energy_multiplier = 2.6
+[sub_resource type="CapsuleMesh" id="Body"]
+material = SubResource("RobeMat")
+radius = 0.36
+height = 1.18
+[sub_resource type="SphereMesh" id="Head"]
+material = SubResource("AshMat")
+radius = 0.27
+height = 0.54
+[sub_resource type="CylinderMesh" id="Hat"]
+material = SubResource("RobeMat")
+top_radius = 0.05
+bottom_radius = 0.3
+height = 0.64
+[sub_resource type="CylinderMesh" id="Staff"]
+material = SubResource("AshMat")
+top_radius = 0.035
+bottom_radius = 0.045
+height = 1.25
+[sub_resource type="SphereMesh" id="Orb"]
+material = SubResource("EmberMat")
+radius = 0.11
+height = 0.22
+[sub_resource type="BoxMesh" id="Book"]
+material = SubResource("RobeMat")
+size = Vector3(0.34, 0.44, 0.1)
+[node name="PlaceholderAshMageModel" type="Node3D"]
+[node name="Robe" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.72, 0)
+mesh = SubResource("Body")
+[node name="Head" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.35, 0)
+mesh = SubResource("Head")
+[node name="AshHat" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.78, 0)
+rotation_degrees = Vector3(0, 0, 8)
+mesh = SubResource("Hat")
+[node name="FireStaff" type="MeshInstance3D" parent="."]
+position = Vector3(0.42, 0.82, -0.16)
+rotation_degrees = Vector3(4, 0, -10)
+mesh = SubResource("Staff")
+[node name="StaffEmber" type="MeshInstance3D" parent="."]
+position = Vector3(0.52, 1.45, -0.16)
+mesh = SubResource("Orb")
+[node name="FloatingGrimoire" type="MeshInstance3D" parent="."]
+position = Vector3(-0.45, 0.95, -0.12)
+rotation_degrees = Vector3(0, -15, 18)
+mesh = SubResource("Book")

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SpellModifierData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/spell_modifier_data.gd" type="Script" id="1"]
+[ext_resource path="res://assets/placeholders/icons/attachment.svg" type="Texture2D" id="2"]
+[resource]
+script = ExtResource("1")
+modifier_id = "ricochet_rune"
+display_name = "Ricochet Rune"
+description = "Rebounds from cover and seeks another nearby enemy."
+modifier_category = "trajectory"
+rarity = "rare"
+compatible_spell_forms = Array[String](["projectile"])
+damage_multiplier = 0.92
+mana_cost_multiplier = 1.16
+behavior_tags = Array[String](["ricochet"])
+ricochet_count = 2
+placeholder_icon = ExtResource("2")
+debug_color = Color(0.7, 0.4, 1, 1)

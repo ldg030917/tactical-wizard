@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+spell_id = "water_barrier"
+display_name = "Water Barrier"
+description = "Condenses a temporary wall of heavy water that blocks movement."
+primary_element = "water"
+spell_family = "water"
+spell_form = "area"
+behavior_type = "barrier"
+base_power = 0.0
+base_mana_cost = 32.0
+base_cast_time_seconds = 0.45
+base_cooldown_seconds = 6
+base_range_meters = 10.0
+projectile_speed_meters_per_second = 0.0
+base_area_radius_meters = 3.2
+status_effect = ""
+effect_duration_seconds = 6
+effect_power = 0
+field_duration_seconds = 6
+secondary_power = 0
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "area", "split", "status", "family", "utility", "duration", "collision", "targeting"])
+debug_color = Color(0.08, 0.58, 1, 1)

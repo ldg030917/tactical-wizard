@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3]
+
+[ext_resource path="res://scripts/data/weapon_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/weapons/weapon_visual_placeholder.tscn" type="PackedScene" id="2"]
+
+[resource]
+script = ExtResource("1")
+item_id = "scattergun"
+display_name = "Marsh Scattergun"
+category = "shotgun"
+damage = 11.0
+fire_rate = 1.05
+magazine_size = 5
+reload_duration = 2.65
+spread_degrees = 11.0
+effective_range = 17.0
+projectile_count = 7
+ammo_type = "ammo_shell"
+base_value = 620
+placeholder_model_scene = ExtResource("2")

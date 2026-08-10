@@ -1,0 +1,50 @@
+[gd_resource type="Resource" script_class="LootTableData" format=3 uid="uid://56one14c1c4i"]
+
+[ext_resource type="Script" uid="uid://8o2fq86yv4r1" path="res://scripts/data/loot_table_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://cc7isq678girl" path="res://scripts/data/loot_entry_data.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/items/mod_increased_area.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/items/mod_projectile_split.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/items/ember_codex.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/items/cinder_charm.tres" id="6"]
+[ext_resource type="Resource" path="res://resources/items/walpurgis_ticket.tres" id="7"]
+[ext_resource type="Resource" path="res://resources/items/mana_crystal.tres" id="8"]
+
+[sub_resource type="Resource" id="E1"]
+script = ExtResource("2")
+item = ExtResource("3")
+selection_weight = 3.0
+
+[sub_resource type="Resource" id="E2"]
+script = ExtResource("2")
+item = ExtResource("4")
+selection_weight = 2.8
+
+[sub_resource type="Resource" id="E3"]
+script = ExtResource("2")
+item = ExtResource("5")
+selection_weight = 1.6
+
+[sub_resource type="Resource" id="E4"]
+script = ExtResource("2")
+item = ExtResource("6")
+selection_weight = 2.0
+
+[sub_resource type="Resource" id="E5"]
+script = ExtResource("2")
+item = ExtResource("7")
+selection_weight = 0.85
+
+[sub_resource type="Resource" id="E6"]
+script = ExtResource("2")
+item = ExtResource("8")
+selection_weight = 4.0
+minimum_quantity = 2
+maximum_quantity = 4
+
+[resource]
+script = ExtResource("1")
+table_id = "arcane_case"
+display_name = "High-Value Arcane Cases"
+minimum_rolls = 3
+maximum_rolls = 4
+entries = Array[ExtResource("2")]([SubResource("E1"), SubResource("E2"), SubResource("E3"), SubResource("E4"), SubResource("E5"), SubResource("E6")])

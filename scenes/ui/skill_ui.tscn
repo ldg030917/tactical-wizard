@@ -1,0 +1,21 @@
+[gd_scene format=3]
+[node name="SkillUI" type="PanelContainer"]
+[node name="Layout" type="VBoxContainer" parent="."]
+[node name="Title" type="Label" parent="Layout"]
+unique_name_in_owner = true
+text = "ARCANE TRAINING"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 26
+[node name="Description" type="Label" parent="Layout"]
+text = "Select a discipline on the left; rank benefits and costs remain visible on the right."
+[node name="Body" type="HSplitContainer" parent="Layout"]
+size_flags_vertical = 3
+split_offset = 410
+[node name="ChoicesPanel" type="PanelContainer" parent="Layout/Body"]
+custom_minimum_size = Vector2(400, 0)
+[node name="SkillRows" type="VBoxContainer" parent="Layout/Body/ChoicesPanel"]
+unique_name_in_owner = true
+[node name="DetailPanel" type="PanelContainer" parent="Layout/Body"]
+size_flags_horizontal = 3
+[node name="SkillDetail" type="VBoxContainer" parent="Layout/Body/DetailPanel"]
+unique_name_in_owner = true

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/item_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/spells/blink_sigil.tres" type="Resource" id="2"]
+[ext_resource path="res://assets/placeholders/icons/neutral.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+item_id = "blink_sigil_page"
+display_name = "Blink Sigil"
+description = "Instantly folds space to the designated safe location."
+category = "spell"
+rarity = "uncommon"
+value_crowns = 240
+base_spell = ExtResource("2")
+primary_element = "neutral"
+item_family = "space"
+placeholder_icon = ExtResource("3")
+debug_color = Color(1, 0.86, 0.38, 1)

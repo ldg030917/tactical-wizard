@@ -1,0 +1,245 @@
+[gd_scene format=3 uid="uid://w8ksirvjh6wh"]
+
+[ext_resource type="Script" uid="uid://cqeutsgspjei1" path="res://scripts/base_scene.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/base/base_spawn_point.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/base/storage_station.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/base/loadout_station.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://scenes/base/workbench.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/base/upgrade_station.tscn" id="7"]
+[ext_resource type="PackedScene" path="res://scenes/base/training_station.tscn" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/base/merchant.tscn" id="9"]
+[ext_resource type="PackedScene" path="res://scenes/base/quest_npc.tscn" id="10"]
+[ext_resource type="PackedScene" path="res://scenes/base/deployment_portal.tscn" id="11"]
+[ext_resource type="PackedScene" path="res://scenes/ui/base_ui.tscn" id="12"]
+[ext_resource type="NavigationMesh" uid="uid://xosauawd26r6" path="res://resources/navigation/base_navigation.tres" id="13"]
+[ext_resource type="PackedScene" path="res://scenes/base/spell_workshop.tscn" id="14"]
+[ext_resource type="PackedScene" path="res://scenes/base/spell_testing_area.tscn" id="15"]
+
+[sub_resource type="BoxShape3D" id="GroundShape"]
+size = Vector3(34, 0.5, 28)
+
+[sub_resource type="StandardMaterial3D" id="GroundMat"]
+albedo_color = Color(0.38, 0.44, 0.35, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="GroundMesh"]
+material = SubResource("GroundMat")
+size = Vector3(34, 0.5, 28)
+
+[sub_resource type="BoxShape3D" id="FenceNSShape"]
+size = Vector3(34, 2.6, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="FenceMat"]
+albedo_color = Color(0.25, 0.3, 0.28, 1)
+roughness = 0.84
+
+[sub_resource type="BoxMesh" id="FenceNSMesh"]
+material = SubResource("FenceMat")
+size = Vector3(34, 2.6, 0.5)
+
+[sub_resource type="BoxShape3D" id="FenceEWShape"]
+size = Vector3(0.5, 2.6, 28)
+
+[sub_resource type="BoxMesh" id="FenceEWMesh"]
+material = SubResource("FenceMat")
+size = Vector3(0.5, 2.6, 28)
+
+[sub_resource type="BoxShape3D" id="FenceGapShape"]
+size = Vector3(14, 2.6, 0.5)
+
+[sub_resource type="BoxMesh" id="FenceGapMesh"]
+material = SubResource("FenceMat")
+size = Vector3(14, 2.6, 0.5)
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 1
+background_color = Color(0.43, 0.52, 0.51, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.77, 0.79, 0.68, 1)
+ambient_light_energy = 0.85
+
+[node name="StarfallRefugeBase" type="Node3D" unique_id=1694749127]
+script = ExtResource("1")
+player_scene = ExtResource("2")
+
+[node name="Environment" type="Node3D" parent="." unique_id=523740978]
+
+[node name="Ground" type="StaticBody3D" parent="Environment" unique_id=1553049307]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Environment/Ground" unique_id=1300928636]
+shape = SubResource("GroundShape")
+
+[node name="Visual" type="Node3D" parent="Environment/Ground" unique_id=1177436290]
+
+[node name="PlaceholderGround" type="MeshInstance3D" parent="Environment/Ground/Visual" unique_id=943948871]
+mesh = SubResource("GroundMesh")
+
+[node name="Buildings" type="Node3D" parent="Environment" unique_id=1278617437]
+
+[node name="BasePerimeter" type="Node3D" parent="Environment/Buildings" unique_id=695590803]
+
+[node name="NorthFence" type="StaticBody3D" parent="Environment/Buildings/BasePerimeter" unique_id=1048420997]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, -14)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Environment/Buildings/BasePerimeter/NorthFence" unique_id=1300599410]
+shape = SubResource("FenceNSShape")
+
+[node name="Visual" type="MeshInstance3D" parent="Environment/Buildings/BasePerimeter/NorthFence" unique_id=1525150865]
+mesh = SubResource("FenceNSMesh")
+
+[node name="WestFence" type="StaticBody3D" parent="Environment/Buildings/BasePerimeter" unique_id=1110180791]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17, 1.3, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Environment/Buildings/BasePerimeter/WestFence" unique_id=321791222]
+shape = SubResource("FenceEWShape")
+
+[node name="Visual" type="MeshInstance3D" parent="Environment/Buildings/BasePerimeter/WestFence" unique_id=38679930]
+mesh = SubResource("FenceEWMesh")
+
+[node name="EastFence" type="StaticBody3D" parent="Environment/Buildings/BasePerimeter" unique_id=442251728]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 17, 1.3, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Environment/Buildings/BasePerimeter/EastFence" unique_id=2112783454]
+shape = SubResource("FenceEWShape")
+
+[node name="Visual" type="MeshInstance3D" parent="Environment/Buildings/BasePerimeter/EastFence" unique_id=186058271]
+mesh = SubResource("FenceEWMesh")
+
+[node name="SouthFenceLeft" type="StaticBody3D" parent="Environment/Buildings/BasePerimeter" unique_id=1563718671]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 1.3, 14)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Environment/Buildings/BasePerimeter/SouthFenceLeft" unique_id=223563914]
+shape = SubResource("FenceGapShape")
+
+[node name="Visual" type="MeshInstance3D" parent="Environment/Buildings/BasePerimeter/SouthFenceLeft" unique_id=1373900232]
+mesh = SubResource("FenceGapMesh")
+
+[node name="SouthFenceRight" type="StaticBody3D" parent="Environment/Buildings/BasePerimeter" unique_id=1503325810]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 1.3, 14)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Environment/Buildings/BasePerimeter/SouthFenceRight" unique_id=1822223465]
+shape = SubResource("FenceGapShape")
+
+[node name="Visual" type="MeshInstance3D" parent="Environment/Buildings/BasePerimeter/SouthFenceRight" unique_id=425595322]
+mesh = SubResource("FenceGapMesh")
+
+[node name="Props" type="Node3D" parent="Environment" unique_id=1904412861]
+
+[node name="ReturnDockLabel" type="Label3D" parent="Environment/Props" unique_id=46587182]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.5, 11)
+billboard = 1
+modulate = Color(0.46, 0.87, 0.69, 1)
+text = "RETURN WAYSTONE"
+font_size = 28
+
+[node name="Lighting" type="Node3D" parent="Environment" unique_id=224288694]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="Environment/Lighting" unique_id=169706976]
+environment = SubResource("Environment")
+
+[node name="Sun" type="DirectionalLight3D" parent="Environment/Lighting" unique_id=603718906]
+transform = Transform3D(0.81915206, 0.46984634, -0.32898995, 0, 0.57357645, 0.81915206, 0.57357645, -0.6710101, 0.46984634, 0, 0, 0)
+shadow_enabled = true
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="Environment" unique_id=22653745]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.00504303, 1.1920929e-07, -0.0027549267)
+navigation_mesh = ExtResource("13")
+
+[node name="PlayerSpawn" type="Node3D" parent="." unique_id=458414276]
+
+[node name="PlayerSpawn_Default" parent="PlayerSpawn" unique_id=549514962 instance=ExtResource("3")]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0, 10)
+spawn_id = "base_default"
+spawn_role = "base"
+
+[node name="Interactables" type="Node3D" parent="." unique_id=844796826]
+
+[node name="StorageStation" parent="Interactables" unique_id=2014093316 instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0, -7)
+
+[node name="LoadoutRack" parent="Interactables" unique_id=1294920383 instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, -7)
+
+[node name="SpellWorkshop" parent="Interactables" unique_id=1855172233 instance=ExtResource("14")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0, -2)
+
+[node name="Workbench" parent="Interactables" unique_id=72862384 instance=ExtResource("6")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -7)
+
+[node name="UpgradeStation" parent="Interactables" unique_id=1925672858 instance=ExtResource("7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, -7)
+
+[node name="TrainingStation" parent="Interactables" unique_id=761036358 instance=ExtResource("8")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 0, -7)
+
+[node name="WardstoneTestingCircle" parent="Interactables" unique_id=2010703128 instance=ExtResource("15")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, 2)
+
+[node name="RefugeQuartermaster" parent="Interactables" unique_id=1418549174 instance=ExtResource("9")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0, 4)
+
+[node name="ArchivistSable_QuestNPC" parent="Interactables" unique_id=604019913 instance=ExtResource("10")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 4)
+
+[node name="AshenVillagePortal" parent="Interactables" unique_id=1025167219 instance=ExtResource("11")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0, 9)
+
+[node name="CameraSetup" type="Node3D" parent="." unique_id=978198381]
+
+[node name="EditorOverviewCamera" type="Camera3D" parent="CameraSetup" unique_id=1007464605]
+transform = Transform3D(1, 0, 0, 0, 0.707, 0.707, 0, -0.707, 0.707, 0, 20, 18)
+
+[node name="BaseController" type="Node" parent="." unique_id=787433641]
+
+[node name="RuntimeActors" type="Node3D" parent="." unique_id=1206601110]
+unique_name_in_owner = true
+
+[node name="TemporaryEffects" type="Node3D" parent="."]
+unique_name_in_owner = true
+
+[node name="BaseSpellHUD" type="CanvasLayer" parent="."]
+
+[node name="Root" type="Control" parent="BaseSpellHUD"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="BaseSpellHUD/Root"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -190.0
+offset_top = -128.0
+offset_right = 190.0
+offset_bottom = -14.0
+
+[node name="Layout" type="VBoxContainer" parent="BaseSpellHUD/Root/Panel"]
+
+[node name="BaseManaGauge" type="ProgressBar" parent="BaseSpellHUD/Root/Panel/Layout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 10)
+max_value = 120.0
+value = 120.0
+show_percentage = false
+modulate = Color(0.25, 0.67, 1, 1)
+
+[node name="BaseSpellSlots" type="HBoxContainer" parent="BaseSpellHUD/Root/Panel/Layout"]
+unique_name_in_owner = true
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="Hint" type="Label" parent="BaseSpellHUD/Root/Panel/Layout"]
+text = "1–3 select  •  Left click casts  •  Mana regenerates"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 12
+
+[node name="BaseUI" parent="." unique_id=256998052 instance=ExtResource("12")]
+unique_name_in_owner = true

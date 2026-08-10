@@ -1,0 +1,48 @@
+[gd_scene format=3]
+[node name="InventoryUI" type="PanelContainer"]
+visible = false
+anchors_preset = 0
+offset_left = 24.0
+offset_top = 94.0
+offset_right = 650.0
+offset_bottom = 690.0
+[node name="Layout" type="VBoxContainer" parent="."]
+[node name="Header" type="HBoxContainer" parent="Layout"]
+[node name="Title" type="Label" parent="Layout/Header"]
+text = "EQUIPMENT & RAID PACK"
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 20
+[node name="SpellsButton" type="Button" parent="Layout/Header"]
+unique_name_in_owner = true
+text = "SPELL SETTINGS"
+[node name="CloseButton" type="Button" parent="Layout/Header"]
+unique_name_in_owner = true
+text = "×"
+[node name="CapacitySummary" type="Label" parent="Layout"]
+unique_name_in_owner = true
+text = "0 / 10 slots"
+[node name="Body" type="HBoxContainer" parent="Layout"]
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+[node name="EquipmentPanel" type="PanelContainer" parent="Layout/Body"]
+custom_minimum_size = Vector2(250, 0)
+[node name="EquipmentLayout" type="VBoxContainer" parent="Layout/Body/EquipmentPanel"]
+[node name="EquipmentTitle" type="Label" parent="Layout/Body/EquipmentPanel/EquipmentLayout"]
+text = "EQUIPMENT"
+horizontal_alignment = 1
+[node name="EquipmentScroll" type="ScrollContainer" parent="Layout/Body/EquipmentPanel/EquipmentLayout"]
+size_flags_vertical = 3
+[node name="EquipmentRows" type="VBoxContainer" parent="Layout/Body/EquipmentPanel/EquipmentLayout/EquipmentScroll"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+[node name="PackPanel" type="PanelContainer" parent="Layout/Body"]
+size_flags_horizontal = 3
+[node name="PackLayout" type="VBoxContainer" parent="Layout/Body/PackPanel"]
+[node name="PackTitle" type="Label" parent="Layout/Body/PackPanel/PackLayout"]
+text = "FIELD PACK"
+horizontal_alignment = 1
+[node name="ScrollContainer" type="ScrollContainer" parent="Layout/Body/PackPanel/PackLayout"]
+size_flags_vertical = 3
+[node name="ItemRows" type="VBoxContainer" parent="Layout/Body/PackPanel/PackLayout/ScrollContainer"]
+unique_name_in_owner = true
+size_flags_horizontal = 3

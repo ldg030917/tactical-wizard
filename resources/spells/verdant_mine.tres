@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+spell_id = "verdant_mine"
+display_name = "Verdant Mine"
+description = "Plants an explosive seed that bursts into poisonous vines on approach."
+primary_element = "grass"
+spell_family = "seed"
+spell_form = "area"
+behavior_type = "mine"
+base_power = 88.0
+base_mana_cost = 36.0
+base_cast_time_seconds = 0.45
+base_cooldown_seconds = 5.2
+base_range_meters = 15.0
+projectile_speed_meters_per_second = 0.0
+base_area_radius_meters = 3
+status_effect = "poison"
+effect_duration_seconds = 14
+effect_power = 5
+field_duration_seconds = 14
+secondary_power = 0
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "area", "split", "status", "family", "utility", "duration", "collision", "targeting"])
+debug_color = Color(0.18, 0.76, 0.22, 1)

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=5 format=3]
+[ext_resource path="res://scripts/data/item_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/weapons/basic_pistol.tres" type="Resource" id="2"]
+[ext_resource path="res://icon.svg" type="Texture2D" id="3"]
+[ext_resource path="res://scenes/weapons/weapon_visual_placeholder.tscn" type="PackedScene" id="4"]
+[resource]
+script = ExtResource("1")
+item_id = "basic_pistol"
+display_name = "Pondside Pistol"
+description = "A reliable compact sidearm."
+category = "weapon"
+stack_size = 1
+inventory_slots = 2
+weight_kg = 1.2
+value_crowns = 120
+weapon_data = ExtResource("2")
+placeholder_icon = ExtResource("3")
+placeholder_world_model = ExtResource("4")
+debug_color = Color(0.56, 0.7, 0.79, 1)

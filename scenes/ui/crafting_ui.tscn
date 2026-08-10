@@ -1,0 +1,29 @@
+[gd_scene format=3]
+[node name="CraftingUI" type="PanelContainer"]
+[node name="Layout" type="VBoxContainer" parent="."]
+[node name="Title" type="Label" parent="Layout"]
+unique_name_in_owner = true
+text = "ARCANE WORKBENCH"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 26
+[node name="Description" type="Label" parent="Layout"]
+text = "Choose an inscription on the left; its output and required materials remain visible on the right."
+autowrap_mode = 2
+[node name="Body" type="HSplitContainer" parent="Layout"]
+size_flags_vertical = 3
+split_offset = 410
+[node name="ChoicesPanel" type="PanelContainer" parent="Layout/Body"]
+custom_minimum_size = Vector2(400, 0)
+[node name="ChoicesLayout" type="VBoxContainer" parent="Layout/Body/ChoicesPanel"]
+[node name="ChoicesTitle" type="Label" parent="Layout/Body/ChoicesPanel/ChoicesLayout"]
+text = "AVAILABLE INSCRIPTIONS"
+horizontal_alignment = 1
+[node name="Scroll" type="ScrollContainer" parent="Layout/Body/ChoicesPanel/ChoicesLayout"]
+size_flags_vertical = 3
+[node name="RecipeRows" type="VBoxContainer" parent="Layout/Body/ChoicesPanel/ChoicesLayout/Scroll"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+[node name="DetailPanel" type="PanelContainer" parent="Layout/Body"]
+size_flags_horizontal = 3
+[node name="RecipeDetail" type="VBoxContainer" parent="Layout/Body/DetailPanel"]
+unique_name_in_owner = true

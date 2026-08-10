@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+spell_id = "blink_sigil"
+display_name = "Blink Sigil"
+description = "Instantly folds space to the designated safe location."
+primary_element = "neutral"
+spell_family = "space"
+spell_form = "self"
+behavior_type = "teleport"
+base_power = 0.0
+base_mana_cost = 30.0
+base_cast_time_seconds = 0.12
+base_cooldown_seconds = 4
+base_range_meters = 10.0
+projectile_speed_meters_per_second = 0.0
+base_area_radius_meters = 1
+status_effect = ""
+effect_duration_seconds = 0
+effect_power = 0
+field_duration_seconds = 0
+secondary_power = 0
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "area", "split", "status", "family", "utility", "duration", "collision", "targeting"])
+debug_color = Color(1, 0.86, 0.38, 1)

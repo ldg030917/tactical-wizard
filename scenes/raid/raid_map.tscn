@@ -1,0 +1,344 @@
+[gd_scene load_steps=44 format=3]
+[ext_resource path="res://scripts/raid_scene.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/player/player.tscn" type="PackedScene" id="2"]
+[ext_resource path="res://scenes/items/loot_container.tscn" type="PackedScene" id="3"]
+[ext_resource path="res://scenes/enemies/mage_enemy.tscn" type="PackedScene" id="4"]
+[ext_resource path="res://scenes/enemies/monster_enemy.tscn" type="PackedScene" id="5"]
+[ext_resource path="res://scenes/enemies/mage_enemy.tscn" type="PackedScene" id="6"]
+[ext_resource path="res://resources/enemies/ash_mage.tres" type="Resource" id="7"]
+[ext_resource path="res://resources/enemies/cinder_hound.tres" type="Resource" id="8"]
+[ext_resource path="res://resources/enemies/ash_mage.tres" type="Resource" id="9"]
+[ext_resource path="res://scenes/raid/enemy_spawn_point.tscn" type="PackedScene" id="10"]
+[ext_resource path="res://scenes/base/base_spawn_point.tscn" type="PackedScene" id="11"]
+[ext_resource path="res://scenes/raid/loot_spawn_point.tscn" type="PackedScene" id="12"]
+[ext_resource path="res://scenes/raid/extraction_zone.tscn" type="PackedScene" id="13"]
+[ext_resource path="res://scenes/ui/hud.tscn" type="PackedScene" id="14"]
+[ext_resource path="res://scenes/raid/environment/open_building.tscn" type="PackedScene" id="15"]
+[ext_resource path="res://scenes/raid/environment/cover_block.tscn" type="PackedScene" id="16"]
+[ext_resource path="res://scenes/raid/environment/tree_placeholder.tscn" type="PackedScene" id="17"]
+[ext_resource path="res://resources/loot_tables/magical_crate.tres" type="Resource" id="18"]
+[ext_resource path="res://resources/loot_tables/potion_cabinet.tres" type="Resource" id="19"]
+[ext_resource path="res://resources/loot_tables/magical_crate.tres" type="Resource" id="20"]
+[ext_resource path="res://resources/loot_tables/spell_component_chest.tres" type="Resource" id="21"]
+[ext_resource path="res://resources/loot_tables/arcane_case.tres" type="Resource" id="22"]
+[ext_resource path="res://resources/loot_tables/monster_drop.tres" type="Resource" id="23"]
+[ext_resource path="res://resources/loot_tables/mage_drop.tres" type="Resource" id="24"]
+[ext_resource path="res://resources/items/walpurgis_ticket.tres" type="Resource" id="25"]
+[ext_resource path="res://resources/items/walpurgis_ticket.tres" type="Resource" id="26"]
+[ext_resource path="res://resources/navigation/raid_navigation.tres" type="NavigationMesh" id="27"]
+[ext_resource path="res://resources/loot_tables/spell_component_chest.tres" type="Resource" id="28"]
+[ext_resource path="res://scenes/regions/elemental_hazard_zone.tscn" type="PackedScene" id="29"]
+[ext_resource path="res://scenes/regions/temporary_grass_wall.tscn" type="PackedScene" id="30"]
+[ext_resource path="res://scenes/enemies/boss_enemy.tscn" type="PackedScene" id="31"]
+[ext_resource path="res://resources/enemies/caldera_archon.tres" type="Resource" id="32"]
+[ext_resource path="res://resources/loot_tables/high_value.tres" type="Resource" id="33"]
+[sub_resource type="Environment" id="Environment"]
+background_mode = 1
+background_color = Color(0.25, 0.18, 0.2, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.71, 0.48, 0.4, 1)
+ambient_light_energy = 0.8
+[sub_resource type="StandardMaterial3D" id="TerrainMat"]
+albedo_color = Color(0.24, 0.2, 0.18, 1)
+roughness = 0.94
+[sub_resource type="StandardMaterial3D" id="PathMat"]
+albedo_color = Color(0.36, 0.27, 0.22, 1)
+roughness = 0.92
+[sub_resource type="StandardMaterial3D" id="BoundaryMat"]
+albedo_color = Color(0.21, 0.26, 0.24, 1)
+[sub_resource type="BoxMesh" id="TerrainMesh"]
+material = SubResource("TerrainMat")
+size = Vector3(52, 0.5, 52)
+[sub_resource type="BoxShape3D" id="TerrainShape"]
+size = Vector3(52, 0.5, 52)
+[sub_resource type="BoxMesh" id="NorthPathMesh"]
+material = SubResource("PathMat")
+size = Vector3(5, 0.04, 47)
+[sub_resource type="BoxMesh" id="VillageLaneMesh"]
+material = SubResource("PathMat")
+size = Vector3(43, 0.04, 4)
+[sub_resource type="BoxMesh" id="BoundaryNSMesh"]
+material = SubResource("BoundaryMat")
+size = Vector3(52, 2.5, 0.6)
+[sub_resource type="BoxShape3D" id="BoundaryNSShape"]
+size = Vector3(52, 2.5, 0.6)
+[sub_resource type="BoxMesh" id="BoundaryEWMesh"]
+material = SubResource("BoundaryMat")
+size = Vector3(0.6, 2.5, 52)
+[sub_resource type="BoxShape3D" id="BoundaryEWShape"]
+size = Vector3(0.6, 2.5, 52)
+
+[node name="AshenVillageRaidMap" type="Node3D"]
+script = ExtResource("1")
+player_scene = ExtResource("2")
+enemy_drop_container_scene = ExtResource("3")
+elemental_hazard_scene = ExtResource("29")
+temporary_grass_wall_scene = ExtResource("30")
+monster_drop_table = ExtResource("23")
+mage_drop_table = ExtResource("24")
+boss_drop_table = ExtResource("33")
+
+[node name="Environment" type="Node3D" parent="."]
+[node name="Terrain" type="StaticBody3D" parent="Environment"]
+position = Vector3(0, -0.3, 0)
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Environment/Terrain"]
+shape = SubResource("TerrainShape")
+[node name="Visual" type="Node3D" parent="Environment/Terrain"]
+[node name="PlaceholderTerrain" type="MeshInstance3D" parent="Environment/Terrain/Visual"]
+mesh = SubResource("TerrainMesh")
+[node name="OutdoorPaths" type="Node3D" parent="Environment"]
+[node name="NorthSouthPath" type="MeshInstance3D" parent="Environment/OutdoorPaths"]
+position = Vector3(0, 0.02, 0)
+mesh = SubResource("NorthPathMesh")
+[node name="AshenVillageMainLane" type="MeshInstance3D" parent="Environment/OutdoorPaths"]
+position = Vector3(-2, 0.03, -5)
+mesh = SubResource("VillageLaneMesh")
+[node name="Buildings" type="Node3D" parent="Environment"]
+[node name="CharredMeetingHall" parent="Environment/Buildings" instance=ExtResource("15")]
+position = Vector3(-13, 0, -11)
+[node name="RuinedApothecary" parent="Environment/Buildings" instance=ExtResource("15")]
+position = Vector3(13, 0, -7)
+scale = Vector3(0.9, 1, 1.25)
+[node name="GuardedEmberSanctum" parent="Environment/Buildings" instance=ExtResource("15")]
+position = Vector3(15, 0, 13)
+scale = Vector3(1.12, 1, 1.14)
+[node name="AshCellar_EnclosedLootArea" parent="Environment/Buildings" instance=ExtResource("15")]
+position = Vector3(-15, -0.35, 13)
+scale = Vector3(0.8, 0.65, 0.8)
+[node name="Cover" type="Node3D" parent="Environment"]
+[node name="Cover_WestJunction" parent="Environment/Cover" instance=ExtResource("16")]
+position = Vector3(-7, 0, 4)
+[node name="Cover_CentralRoad" parent="Environment/Cover" instance=ExtResource("16")]
+position = Vector3(6, 0, 2)
+scale = Vector3(1.4, 1, 0.9)
+[node name="Cover_Southwest" parent="Environment/Cover" instance=ExtResource("16")]
+position = Vector3(-16, 0, 9)
+[node name="Cover_Northeast" parent="Environment/Cover" instance=ExtResource("16")]
+position = Vector3(12, 0, -17)
+scale = Vector3(0.8, 1.3, 1.2)
+[node name="Cover_NorthRoad" parent="Environment/Cover" instance=ExtResource("16")]
+position = Vector3(-4, 0, -17)
+[node name="Cover_EastPath" parent="Environment/Cover" instance=ExtResource("16")]
+position = Vector3(18, 0, 2)
+[node name="Cover_WestPath" parent="Environment/Cover" instance=ExtResource("16")]
+position = Vector3(-20, 0, -4)
+scale = Vector3(1.3, 0.8, 1.0)
+[node name="Props" type="Node3D" parent="Environment"]
+[node name="Tree_Southwest" parent="Environment/Props" instance=ExtResource("17")]
+position = Vector3(-19, 0, 17)
+[node name="Tree_SouthRoute" parent="Environment/Props" instance=ExtResource("17")]
+position = Vector3(-8, 0, 15)
+[node name="Tree_WestRoad" parent="Environment/Props" instance=ExtResource("17")]
+position = Vector3(-22, 0, 2)
+[node name="Tree_Northwest" parent="Environment/Props" instance=ExtResource("17")]
+position = Vector3(-19, 0, -20)
+[node name="Tree_NorthCenter" parent="Environment/Props" instance=ExtResource("17")]
+position = Vector3(6, 0, -21)
+[node name="Tree_EastBoundary" parent="Environment/Props" instance=ExtResource("17")]
+position = Vector3(22, 0, -14)
+[node name="Tree_Depot" parent="Environment/Props" instance=ExtResource("17")]
+position = Vector3(21, 0, 12)
+[node name="Boundaries" type="Node3D" parent="Environment"]
+[node name="NorthBoundary" type="StaticBody3D" parent="Environment/Boundaries"]
+position = Vector3(0, 1.25, -26)
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Environment/Boundaries/NorthBoundary"]
+shape = SubResource("BoundaryNSShape")
+[node name="Visual" type="MeshInstance3D" parent="Environment/Boundaries/NorthBoundary"]
+mesh = SubResource("BoundaryNSMesh")
+[node name="SouthBoundary" type="StaticBody3D" parent="Environment/Boundaries"]
+position = Vector3(0, 1.25, 26)
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Environment/Boundaries/SouthBoundary"]
+shape = SubResource("BoundaryNSShape")
+[node name="Visual" type="MeshInstance3D" parent="Environment/Boundaries/SouthBoundary"]
+mesh = SubResource("BoundaryNSMesh")
+[node name="WestBoundary" type="StaticBody3D" parent="Environment/Boundaries"]
+position = Vector3(-26, 1.25, 0)
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Environment/Boundaries/WestBoundary"]
+shape = SubResource("BoundaryEWShape")
+[node name="Visual" type="MeshInstance3D" parent="Environment/Boundaries/WestBoundary"]
+mesh = SubResource("BoundaryEWMesh")
+[node name="EastBoundary" type="StaticBody3D" parent="Environment/Boundaries"]
+position = Vector3(26, 1.25, 0)
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Environment/Boundaries/EastBoundary"]
+shape = SubResource("BoundaryEWShape")
+[node name="Visual" type="MeshInstance3D" parent="Environment/Boundaries/EastBoundary"]
+mesh = SubResource("BoundaryEWMesh")
+[node name="Lighting" type="Node3D" parent="Environment"]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="Environment/Lighting"]
+unique_name_in_owner = true
+environment = SubResource("Environment")
+[node name="Sun" type="DirectionalLight3D" parent="Environment/Lighting"]
+unique_name_in_owner = true
+rotation_degrees = Vector3(-58, -28, 0)
+shadow_enabled = true
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="Environment"]
+navigation_mesh = ExtResource("27")
+
+[node name="PlayerSpawns" type="Node3D" parent="."]
+[node name="PlayerSpawn_Default" parent="PlayerSpawns" instance=ExtResource("11")]
+unique_name_in_owner = true
+position = Vector3(0, 0, 20)
+spawn_id = "raid_south_entry"
+spawn_role = "raid"
+facing_direction_degrees = 180.0
+
+[node name="EnemySpawns" type="Node3D" parent="."]
+unique_name_in_owner = true
+[node name="MonsterSpawn_SouthRoute" parent="EnemySpawns" instance=ExtResource("10")]
+position = Vector3(-6, 0, 11)
+spawn_id = "cinder_hound_south_route"
+allowed_enemy_scenes = Array[PackedScene]([ExtResource("4"), ExtResource("5")])
+allowed_enemy_resources = Array[EnemyData]([ExtResource("7"), ExtResource("8")])
+spawn_chance = 1.0
+patrol_radius = 5.0
+[node name="MageSpawn_CharredHall" parent="EnemySpawns" instance=ExtResource("10")]
+position = Vector3(-17, 0, -7)
+spawn_id = "ash_mage_charred_hall"
+allowed_enemy_scenes = Array[PackedScene]([ExtResource("4"), ExtResource("5")])
+allowed_enemy_resources = Array[EnemyData]([ExtResource("7"), ExtResource("8")])
+spawn_chance = 1.0
+patrol_radius = 6.0
+[node name="MonsterSpawn_NorthLane" parent="EnemySpawns" instance=ExtResource("10")]
+position = Vector3(7, 0, -12)
+spawn_id = "cinder_hound_north_lane"
+allowed_enemy_scenes = Array[PackedScene]([ExtResource("4"), ExtResource("5")])
+allowed_enemy_resources = Array[EnemyData]([ExtResource("7"), ExtResource("8")])
+spawn_chance = 1.0
+[node name="MonsterSpawn_EastRuin" parent="EnemySpawns" instance=ExtResource("10")]
+position = Vector3(18, 0, -3)
+spawn_id = "cinder_hound_east_ruin"
+allowed_enemy_scenes = Array[PackedScene]([ExtResource("5")])
+allowed_enemy_resources = Array[EnemyData]([ExtResource("8")])
+spawn_chance = 1.0
+patrol_radius = 7.0
+[node name="MageSpawn_Northwest" parent="EnemySpawns" instance=ExtResource("10")]
+position = Vector3(-7, 0, -19)
+spawn_id = "ash_mage_northwest_path"
+allowed_enemy_scenes = Array[PackedScene]([ExtResource("4")])
+allowed_enemy_resources = Array[EnemyData]([ExtResource("7")])
+spawn_chance = 1.0
+[node name="MonsterSpawn_SanctumApproach" parent="EnemySpawns" instance=ExtResource("10")]
+position = Vector3(9, 0, 9)
+spawn_id = "cinder_hound_sanctum_approach"
+allowed_enemy_scenes = Array[PackedScene]([ExtResource("5")])
+allowed_enemy_resources = Array[EnemyData]([ExtResource("8")])
+spawn_chance = 0.8
+[node name="MonsterSpawn_Southwest" parent="EnemySpawns" instance=ExtResource("10")]
+position = Vector3(-19, 0, 15)
+spawn_id = "cinder_hound_southwest_ash"
+allowed_enemy_scenes = Array[PackedScene]([ExtResource("4"), ExtResource("5")])
+allowed_enemy_resources = Array[EnemyData]([ExtResource("7"), ExtResource("8")])
+spawn_chance = 0.7
+[node name="MageSpawn_HighValueSanctum" parent="EnemySpawns" instance=ExtResource("10")]
+position = Vector3(17, 0, 14)
+spawn_id = "ash_mage_ember_sanctum_guard"
+allowed_enemy_scenes = Array[PackedScene]([ExtResource("31")])
+allowed_enemy_resources = Array[EnemyData]([ExtResource("32")])
+spawn_chance = 1.0
+patrol_radius = 3.0
+guards_high_value_area = true
+difficulty_tier = 3
+
+[node name="LootSpawns" type="Node3D" parent="."]
+unique_name_in_owner = true
+[node name="LootSpawn_WestField" parent="LootSpawns" instance=ExtResource("12")]
+position = Vector3(-12, 0, 8)
+spawn_id = "west_field_food"
+loot_table = ExtResource("20")
+container_scene = ExtResource("3")
+[node name="LootSpawn_CentralFlood" parent="LootSpawns" instance=ExtResource("12")]
+position = Vector3(4, 0, -15)
+spawn_id = "central_flood_crate"
+loot_table = ExtResource("18")
+container_scene = ExtResource("3")
+[node name="LootSpawn_Depot" parent="LootSpawns" instance=ExtResource("12")]
+position = Vector3(20, 0, 9)
+spawn_id = "depot_high_value"
+loot_table = ExtResource("21")
+activation_chance = 0.55
+container_scene = ExtResource("3")
+rare_loot_multiplier = 1.5
+
+[node name="LootContainers" type="Node3D" parent="."]
+unique_name_in_owner = true
+[node name="MagicalCrate_01" parent="LootContainers" instance=ExtResource("3")]
+position = Vector3(-10, 0, -9)
+container_id = "charred_hall_magical_crate_01"
+container_name = "Basic Magical Crate"
+loot_table = ExtResource("18")
+activation_chance = 1.0
+[node name="PotionCabinet_01" parent="LootContainers" instance=ExtResource("3")]
+position = Vector3(-15, 0, -12)
+container_id = "charred_hall_potion_cabinet_01"
+container_name = "Abandoned Potion Cabinet"
+loot_table = ExtResource("19")
+activation_chance = 0.9
+[node name="SpellComponentChest_01" parent="LootContainers" instance=ExtResource("3")]
+position = Vector3(11, 0, -6)
+container_id = "apothecary_component_chest_01"
+container_name = "Spell-Component Chest"
+loot_table = ExtResource("28")
+activation_chance = 0.85
+[node name="SpellComponentChest_02" parent="LootContainers" instance=ExtResource("3")]
+position = Vector3(15, 0, -10)
+container_id = "apothecary_component_chest_02"
+container_name = "Sealed Formula Chest"
+loot_table = ExtResource("21")
+activation_chance = 0.8
+[node name="VillageMagicalCrate_02" parent="LootContainers" instance=ExtResource("3")]
+position = Vector3(-19, 0, 7)
+container_id = "west_lane_magical_crate_02"
+container_name = "Scorched Magical Crate"
+loot_table = ExtResource("20")
+activation_chance = 0.84
+[node name="VillageMagicalCrate_03" parent="LootContainers" instance=ExtResource("3")]
+position = Vector3(6, 0, 7)
+container_id = "central_square_magical_crate_03"
+container_name = "Collapsed Shrine Crate"
+loot_table = ExtResource("18")
+activation_chance = 0.82
+[node name="HighValueArcaneCase_EmberSanctum" parent="LootContainers" instance=ExtResource("3")]
+position = Vector3(14, 0, 13)
+container_id = "ember_sanctum_arcane_case"
+container_name = "High-Value Arcane Case"
+loot_table = ExtResource("22")
+activation_chance = 1.0
+starts_locked = false
+minimum_items = 3
+maximum_items = 5
+
+[node name="ExtractionZones" type="Node3D" parent="."]
+[node name="Extraction_AshenWaygate" parent="ExtractionZones" instance=ExtResource("13")]
+position = Vector3(-21, 0, -21)
+extraction_id = "ashen_waygate"
+extraction_name = "Ashen Waygate"
+always_available = true
+countdown_duration = 6.0
+[node name="QuestLocations" type="Node3D" parent="."]
+[node name="QuestLocation_EmberSanctum" type="Marker3D" parent="QuestLocations"]
+position = Vector3(14, 0, 13)
+[node name="EditorLabel" type="Label3D" parent="QuestLocations/QuestLocation_EmberSanctum"]
+position = Vector3(0, 2.8, 0)
+modulate = Color(0.86, 0.45, 0.92, 1)
+font_size = 26
+billboard = 1
+no_depth_test = true
+text = "QUEST LOCATION\nEmber Sanctum"
+
+[node name="CameraSetup" type="Node3D" parent="."]
+[node name="EditorOverviewCamera" type="Camera3D" parent="CameraSetup"]
+transform = Transform3D(1, 0, 0, 0, 0.707, 0.707, 0, -0.707, 0.707, 0, 32, 26)
+current = false
+[node name="FogOfWar" type="Node" parent="."]
+[node name="RaidController" type="Node" parent="."]
+[node name="RuntimeActors" type="Node3D" parent="."]
+unique_name_in_owner = true
+[node name="TemporaryEffects" type="Node3D" parent="."]
+unique_name_in_owner = true
+[node name="HUD" parent="." instance=ExtResource("14")]
+unique_name_in_owner = true

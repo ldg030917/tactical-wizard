@@ -1,0 +1,31 @@
+[gd_scene load_steps=6 format=3]
+[sub_resource type="StandardMaterial3D" id="BodyMat"]
+albedo_color = Color(0.37, 0.45, 0.5, 1)
+roughness = 0.7
+[sub_resource type="StandardMaterial3D" id="WeaponMat"]
+albedo_color = Color(0.12, 0.15, 0.17, 1)
+[sub_resource type="SphereMesh" id="Body"]
+material = SubResource("BodyMat")
+radius = 0.49
+height = 1.05
+radial_segments = 12
+rings = 6
+[sub_resource type="SphereMesh" id="Head"]
+material = SubResource("BodyMat")
+radius = 0.35
+height = 0.66
+radial_segments = 12
+rings = 6
+[sub_resource type="BoxMesh" id="Weapon"]
+material = SubResource("WeaponMat")
+size = Vector3(0.2, 0.2, 1.0)
+[node name="PlaceholderGuardModel" type="Node3D"]
+[node name="ArmoredBody" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.88, 0)
+mesh = SubResource("Body")
+[node name="Head" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.45, -0.05)
+mesh = SubResource("Head")
+[node name="GuardWeapon" type="MeshInstance3D" parent="."]
+position = Vector3(0.42, 0.98, -0.38)
+mesh = SubResource("Weapon")

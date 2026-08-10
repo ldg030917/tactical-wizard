@@ -1,0 +1,82 @@
+[gd_scene load_steps=14 format=3]
+
+[sub_resource type="StandardMaterial3D" id="RobeMat"]
+albedo_color = Color(0.18, 0.12, 0.31, 1)
+roughness = 0.82
+[sub_resource type="StandardMaterial3D" id="TrimMat"]
+albedo_color = Color(0.61, 0.31, 0.78, 1)
+roughness = 0.66
+[sub_resource type="StandardMaterial3D" id="SkinMat"]
+albedo_color = Color(0.82, 0.68, 0.52, 1)
+roughness = 0.8
+[sub_resource type="StandardMaterial3D" id="WandMat"]
+albedo_color = Color(0.35, 0.18, 0.08, 1)
+[sub_resource type="StandardMaterial3D" id="CrystalMat"]
+albedo_color = Color(0.27, 0.58, 1, 1)
+emission_enabled = true
+emission = Color(0.2, 0.48, 1, 1)
+emission_energy_multiplier = 2.2
+[sub_resource type="CapsuleMesh" id="BodyMesh"]
+material = SubResource("RobeMat")
+radius = 0.34
+height = 1.1
+[sub_resource type="SphereMesh" id="HeadMesh"]
+material = SubResource("SkinMat")
+radius = 0.26
+height = 0.52
+[sub_resource type="CylinderMesh" id="HatBrimMesh"]
+material = SubResource("TrimMat")
+top_radius = 0.45
+bottom_radius = 0.45
+height = 0.08
+[sub_resource type="CylinderMesh" id="HatConeMesh"]
+material = SubResource("RobeMat")
+top_radius = 0.04
+bottom_radius = 0.28
+height = 0.72
+[sub_resource type="CylinderMesh" id="WandMesh"]
+material = SubResource("WandMat")
+top_radius = 0.035
+bottom_radius = 0.045
+height = 0.85
+[sub_resource type="SphereMesh" id="CrystalMesh"]
+material = SubResource("CrystalMat")
+radius = 0.09
+height = 0.18
+[sub_resource type="BoxMesh" id="BookMesh"]
+material = SubResource("TrimMat")
+size = Vector3(0.35, 0.46, 0.12)
+[sub_resource type="CapsuleMesh" id="ArmMesh"]
+material = SubResource("RobeMat")
+radius = 0.1
+height = 0.55
+
+[node name="PlaceholderMageModel" type="Node3D"]
+[node name="RobeBody" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.76, 0)
+mesh = SubResource("BodyMesh")
+[node name="Head" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.42, -0.03)
+mesh = SubResource("HeadMesh")
+[node name="HatBrim" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.67, -0.02)
+mesh = SubResource("HatBrimMesh")
+[node name="CrookedHat" type="MeshInstance3D" parent="."]
+position = Vector3(0.08, 2.0, -0.01)
+rotation_degrees = Vector3(0, 0, -12)
+mesh = SubResource("HatConeMesh")
+[node name="CastingArm" type="MeshInstance3D" parent="."]
+position = Vector3(0.39, 0.94, -0.12)
+rotation_degrees = Vector3(68, 0, -18)
+mesh = SubResource("ArmMesh")
+[node name="Wand" type="MeshInstance3D" parent="."]
+position = Vector3(0.43, 1.04, -0.5)
+rotation_degrees = Vector3(78, 0, 0)
+mesh = SubResource("WandMesh")
+[node name="WandCrystal" type="MeshInstance3D" parent="."]
+position = Vector3(0.43, 1.1, -0.91)
+mesh = SubResource("CrystalMesh")
+[node name="Spellbook" type="MeshInstance3D" parent="."]
+position = Vector3(-0.43, 0.93, 0.04)
+rotation_degrees = Vector3(0, 0, 12)
+mesh = SubResource("BookMesh")

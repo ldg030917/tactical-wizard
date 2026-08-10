@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="LootTableData" format=3 uid="uid://cct12c3gcbqvp"]
+
+[ext_resource type="Script" uid="uid://8o2fq86yv4r1" path="res://scripts/data/loot_table_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://cc7isq678girl" path="res://scripts/data/loot_entry_data.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/items/health_potion.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/items/mana_potion.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/items/mana_crystal.tres" id="5"]
+
+[sub_resource type="Resource" id="E1"]
+script = ExtResource("2")
+item = ExtResource("3")
+selection_weight = 4.0
+maximum_quantity = 2
+
+[sub_resource type="Resource" id="E2"]
+script = ExtResource("2")
+item = ExtResource("4")
+selection_weight = 4.0
+maximum_quantity = 2
+
+[sub_resource type="Resource" id="E3"]
+script = ExtResource("2")
+item = ExtResource("5")
+selection_weight = 2.5
+maximum_quantity = 3
+
+[resource]
+script = ExtResource("1")
+table_id = "potion_cabinet"
+display_name = "Abandoned Potion Cabinets"
+minimum_rolls = 2
+entries = Array[ExtResource("2")]([SubResource("E1"), SubResource("E2"), SubResource("E3")])

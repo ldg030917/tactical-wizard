@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SpellModifierData" format=3 uid="uid://b2710rsmvbxuw"]
+
+[ext_resource type="Script" uid="uid://bv1xj2tsiw2jh" path="res://scripts/data/spell_modifier_data.gd" id="1"]
+[ext_resource type="Texture2D" path="res://icon.svg" id="2"]
+
+[resource]
+script = ExtResource("1")
+modifier_id = "projectile_split"
+display_name = "Forked Invocation"
+description = "Splits a projectile into three weaker bolts with a higher total mana cost."
+modifier_category = "split"
+compatible_spell_forms = Array[String](["projectile"])
+compatible_spell_ids = Array[String](["fireball", "ice_spear"])
+damage_multiplier = 0.72
+mana_cost_multiplier = 1.55
+cast_time_multiplier = 1.18
+projectile_count_add = 2
+placeholder_icon = ExtResource("2")
+debug_color = Color(1, 0.75, 0.28, 1)

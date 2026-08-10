@@ -1,0 +1,30 @@
+[gd_scene load_steps=8 format=3]
+[ext_resource path="res://scripts/main.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/base/base.tscn" type="PackedScene" id="2"]
+[ext_resource path="res://scenes/raid/raid_map.tscn" type="PackedScene" id="3"]
+[ext_resource path="res://scenes/ui/raid_result_ui.tscn" type="PackedScene" id="4"]
+[ext_resource path="res://scenes/ui/pause_menu.tscn" type="PackedScene" id="5"]
+[ext_resource path="res://scenes/start/start_screen.tscn" type="PackedScene" id="6"]
+[ext_resource path="res://scripts/multiplayer/authority_bridge.gd" type="Script" id="7"]
+[node name="GameRoot" type="Node"]
+script = ExtResource("1")
+base_scene = ExtResource("2")
+raid_scene = ExtResource("3")
+start_screen_scene = ExtResource("6")
+[node name="WorldContainer" type="Node" parent="."]
+unique_name_in_owner = true
+[node name="PersistentSystems" type="Node" parent="."]
+[node name="SaveManager_AutoloadBridge" type="Node" parent="PersistentSystems"]
+[node name="ItemDatabase_ResourceRegistry" type="Node" parent="PersistentSystems"]
+[node name="QuestManager_GameStateBridge" type="Node" parent="PersistentSystems"]
+[node name="ProgressionManager_GameStateBridge" type="Node" parent="PersistentSystems"]
+[node name="AudioManager" type="Node" parent="PersistentSystems"]
+[node name="AuthorityBridge" type="Node" parent="PersistentSystems"]
+script = ExtResource("7")
+[node name="SceneTransition" type="CanvasLayer" parent="."]
+[node name="GlobalUI" type="CanvasLayer" parent="."]
+layer = 20
+[node name="RaidResultUI" parent="GlobalUI" instance=ExtResource("4")]
+unique_name_in_owner = true
+[node name="PauseMenu" parent="GlobalUI" instance=ExtResource("5")]
+unique_name_in_owner = true

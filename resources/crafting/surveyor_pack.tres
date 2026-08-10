@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="CraftingRecipeData" load_steps=10 format=3]
+[ext_resource path="res://scripts/data/crafting_recipe_data.gd" type="Script" id="1"]
+[ext_resource path="res://scripts/data/craft_ingredient_data.gd" type="Script" id="2"]
+[ext_resource path="res://resources/items/rare_component.tres" type="Resource" id="3"]
+[ext_resource path="res://resources/items/cloth.tres" type="Resource" id="4"]
+[ext_resource path="res://resources/items/parts.tres" type="Resource" id="5"]
+[ext_resource path="res://resources/items/large_pack.tres" type="Resource" id="6"]
+[sub_resource type="Resource" id="I1"]
+script = ExtResource("2")
+item = ExtResource("3")
+quantity = 2
+[sub_resource type="Resource" id="I2"]
+script = ExtResource("2")
+item = ExtResource("4")
+quantity = 3
+[sub_resource type="Resource" id="I3"]
+script = ExtResource("2")
+item = ExtResource("5")
+quantity = 2
+[resource]
+script = ExtResource("1")
+recipe_id = "surveyor_pack"
+display_name = "Build Surveyor Pack"
+description = "Construct a high-capacity field pack."
+ingredients = Array[CraftIngredientData]([SubResource("I1"), SubResource("I2"), SubResource("I3")])
+output_item = ExtResource("6")
+required_workbench_level = 3
+currency_cost = 140

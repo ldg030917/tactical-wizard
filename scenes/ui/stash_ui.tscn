@@ -1,0 +1,52 @@
+[gd_scene format=3]
+
+[node name="StashUI" type="PanelContainer"]
+
+[node name="Layout" type="VBoxContainer" parent="."]
+
+[node name="Title" type="Label" parent="Layout"]
+text = "EQUIPMENT & PERSISTENT STASH"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 26
+
+[node name="Description" type="Label" parent="Layout"]
+text = "Drag items from storage directly into equipment slots. Changes are shown immediately."
+autowrap_mode = 2
+
+[node name="Body" type="HBoxContainer" parent="Layout"]
+size_flags_vertical = 3
+theme_override_constants/separation = 14
+
+[node name="EquipmentPanel" type="PanelContainer" parent="Layout/Body"]
+custom_minimum_size = Vector2(350, 0)
+
+[node name="EquipmentLayout" type="VBoxContainer" parent="Layout/Body/EquipmentPanel"]
+
+[node name="EquipmentTitle" type="Label" parent="Layout/Body/EquipmentPanel/EquipmentLayout"]
+text = "CURRENT EQUIPMENT"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 19
+
+[node name="EquipmentScroll" type="ScrollContainer" parent="Layout/Body/EquipmentPanel/EquipmentLayout"]
+size_flags_vertical = 3
+
+[node name="EquipmentRows" type="VBoxContainer" parent="Layout/Body/EquipmentPanel/EquipmentLayout/EquipmentScroll"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="StoragePanel" type="PanelContainer" parent="Layout/Body"]
+size_flags_horizontal = 3
+
+[node name="StorageLayout" type="VBoxContainer" parent="Layout/Body/StoragePanel"]
+
+[node name="StorageTitle" type="Label" parent="Layout/Body/StoragePanel/StorageLayout"]
+text = "STORAGE"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 19
+
+[node name="Scroll" type="ScrollContainer" parent="Layout/Body/StoragePanel/StorageLayout"]
+size_flags_vertical = 3
+
+[node name="ItemRows" type="VBoxContainer" parent="Layout/Body/StoragePanel/StorageLayout/Scroll"]
+unique_name_in_owner = true
+size_flags_horizontal = 3

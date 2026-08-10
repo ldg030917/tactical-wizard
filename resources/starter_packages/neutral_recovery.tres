@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="StarterPackageData" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/starter_package_data.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+package_id = "neutral_recovery"
+display_name = "Basic Neutral Package"
+description = "A cheap replacement grimoire, Neutral formula, Neutral dagger, basic focus, armor, and healing potion."
+currency_cost = 105
+item_ids = Array[String](["apprentice_grimoire", "apprentice_wand", "arcane_bolt_page", "neutral_dagger", "cloth_armor", "health_potion"])
+quantities = Array[int]([1, 1, 1, 1, 1, 1])

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=5 format=3]
+[ext_resource path="res://scripts/data/enemy_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/spells/fireball.tres" type="Resource" id="2"]
+[ext_resource path="res://resources/loot_tables/mage_drop.tres" type="Resource" id="3"]
+[ext_resource path="res://scenes/enemies/visuals/ash_mage_visual.tscn" type="PackedScene" id="4"]
+[resource]
+script = ExtResource("1")
+enemy_id = "ash_mage"
+display_name = "Ash-Pact Mage"
+behavior_type = "mage"
+difficulty_tier = 2
+maximum_health = 78.0
+movement_speed = 2.75
+detection_range_meters = 16.0
+hearing_range_meters = 19.0
+attack_range_meters = 12.5
+attack_damage = 18.0
+attack_interval_seconds = 1.8
+prepared_spell = ExtResource("2")
+loot_table = ExtResource("3")
+fire_resistance = 0.18
+visual_scene = ExtResource("4")
+debug_color = Color(0.58, 0.17, 0.64, 1)

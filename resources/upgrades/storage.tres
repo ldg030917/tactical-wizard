@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="BaseUpgradeData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/base_upgrade_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/items/arcane_dust.tres" type="Resource" id="2"]
+[resource]
+script = ExtResource("1")
+upgrade_id = "storage"
+display_name = "Expanded Reliquary"
+description = "Adds twenty persistent magical stash slots per level."
+maximum_level = 3
+currency_cost_per_level = 180
+material_item = ExtResource("2")
+material_cost_per_level = 2
+benefit_per_level = 20.0

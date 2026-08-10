@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SpellModifierData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/spell_modifier_data.gd" type="Script" id="1"]
+[ext_resource path="res://assets/placeholders/icons/attachment.svg" type="Texture2D" id="2"]
+[resource]
+script = ExtResource("1")
+modifier_id = "right_pivot_sigil"
+display_name = "Right Pivot Sigil"
+description = "At the designated point, turns ninety degrees right and continues."
+modifier_category = "trajectory"
+rarity = "uncommon"
+compatible_spell_forms = Array[String](["projectile"])
+behavior_tags = Array[String](["turn_right_at_target"])
+placeholder_icon = ExtResource("2")
+debug_color = Color(0.7, 0.4, 1, 1)

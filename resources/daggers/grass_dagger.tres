@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="DaggerData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/dagger_data.gd" type="Script" id="1"]
+[ext_resource path="res://assets/placeholders/icons/grass.svg" type="Texture2D" id="2"]
+[resource]
+script = ExtResource("1")
+dagger_id = "grass_dagger"
+display_name = "Thornroot Dagger"
+primary_element = "grass"
+damage = 24.0
+attack_speed = 1.4
+stamina_cost = 18.0
+status_effect = "poison"
+placeholder_icon = ExtResource("2")
+debug_color = Color(0.35, 0.8, 0.35, 1)

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3]
+
+[ext_resource path="res://scripts/data/weapon_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/weapons/weapon_visual_placeholder.tscn" type="PackedScene" id="2"]
+
+[resource]
+script = ExtResource("1")
+item_id = "auto_carbine"
+display_name = "Reedline Carbine"
+category = "automatic"
+damage = 14.0
+fire_rate = 9.0
+magazine_size = 24
+reload_duration = 2.1
+spread_degrees = 5.0
+effective_range = 34.0
+projectile_count = 1
+ammo_type = "ammo_light"
+base_value = 460
+placeholder_model_scene = ExtResource("2")

@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="LootTableData" load_steps=10 format=3]
+[ext_resource path="res://scripts/data/loot_table_data.gd" type="Script" id="1"]
+[ext_resource path="res://scripts/data/loot_entry_data.gd" type="Script" id="2"]
+[ext_resource path="res://resources/items/scrap.tres" type="Resource" id="3"]
+[ext_resource path="res://resources/items/parts.tres" type="Resource" id="4"]
+[ext_resource path="res://resources/items/access_key.tres" type="Resource" id="5"]
+[sub_resource type="Resource" id="E1"]
+script = ExtResource("2")
+item = ExtResource("3")
+selection_weight = 5.0
+maximum_quantity = 3
+[sub_resource type="Resource" id="E2"]
+script = ExtResource("2")
+item = ExtResource("4")
+selection_weight = 4.0
+maximum_quantity = 2
+[sub_resource type="Resource" id="E3"]
+script = ExtResource("2")
+item = ExtResource("5")
+selection_weight = 0.8
+[resource]
+script = ExtResource("1")
+table_id = "tool_cabinet"
+display_name = "Tool Cabinets"
+minimum_rolls = 2
+maximum_rolls = 3
+entries = Array[LootEntryData]([SubResource("E1"), SubResource("E2"), SubResource("E3")])

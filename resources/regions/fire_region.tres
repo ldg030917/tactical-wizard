@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="RegionData" load_steps=3 format=3]
+[ext_resource path="res://scripts/data/region_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/regions/fire_region.tscn" type="PackedScene" id="2"]
+[resource]
+script = ExtResource("1")
+region_id = "fire_region"
+display_name = "Ashen Caldera"
+description = "Burn zones and Fire-biased loot. Smoke, magma, and explosion families appear at higher tiers."
+primary_element = "fire"
+scene = ExtResource("2")
+difficulty_tier = 1
+hazard_type = "burn_zones"
+hazard_power = 7.0
+visual_color = Color(0.95, 0.32, 0.12, 1)

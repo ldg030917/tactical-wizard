@@ -1,0 +1,69 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource path="res://scripts/spells/spell_projectile.gd" type="Script" id="1"]
+[sub_resource type="SphereShape3D" id="ProjectileShape"]
+radius = 0.24
+[sub_resource type="SphereMesh" id="ProjectileMesh"]
+radius = 0.24
+height = 0.48
+[sub_resource type="ParticleProcessMaterial" id="TrailProcess"]
+emission_shape = 1
+emission_sphere_radius = 0.12
+initial_velocity_min = 0.2
+initial_velocity_max = 0.7
+gravity = Vector3(0, 0, 0)
+scale_min = 0.08
+scale_max = 0.18
+[sub_resource type="SphereMesh" id="TrailMesh"]
+radius = 0.06
+height = 0.12
+[sub_resource type="TorusMesh" id="OrbitRingMeshA"]
+inner_radius = 0.24
+outer_radius = 0.34
+rings = 20
+ring_segments = 10
+[sub_resource type="TorusMesh" id="OrbitRingMeshB"]
+inner_radius = 0.3
+outer_radius = 0.36
+rings = 20
+ring_segments = 8
+
+[node name="SpellProjectile" type="Area3D"]
+script = ExtResource("1")
+collision_layer = 8
+collision_mask = 5
+monitoring = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("ProjectileShape")
+
+[node name="ProjectileController" type="Node" parent="."]
+
+[node name="Visual" type="Node3D" parent="."]
+unique_name_in_owner = true
+
+[node name="SpellMesh" type="MeshInstance3D" parent="Visual"]
+unique_name_in_owner = true
+mesh = SubResource("ProjectileMesh")
+
+[node name="OrbitRingA" type="MeshInstance3D" parent="Visual"]
+unique_name_in_owner = true
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("OrbitRingMeshA")
+
+[node name="OrbitRingB" type="MeshInstance3D" parent="Visual"]
+unique_name_in_owner = true
+rotation_degrees = Vector3(35, 20, 0)
+mesh = SubResource("OrbitRingMeshB")
+
+[node name="Trail" type="GPUParticles3D" parent="Visual"]
+unique_name_in_owner = true
+amount = 18
+lifetime = 0.45
+process_material = SubResource("TrailProcess")
+draw_pass_1 = SubResource("TrailMesh")
+
+[node name="Light" type="OmniLight3D" parent="Visual"]
+unique_name_in_owner = true
+omni_range = 3.0
+light_energy = 1.8

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/spells/spell_projectile.tscn" type="PackedScene" id="2"]
+[ext_resource path="res://assets/placeholders/icons/water.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+spell_id = "lightning_arc"
+display_name = "Lightning Arc"
+description = "An extremely fast Water-aligned Lightning strike."
+primary_element = "water"
+spell_family = "lightning"
+base_power = 38.0
+base_mana_cost = 31.0
+base_cast_time_seconds = 0.16
+base_cooldown_seconds = 1.25
+base_range_meters = 20.0
+projectile_speed_meters_per_second = 30.0
+base_area_radius_meters = 0.45
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "split"])
+placeholder_icon = ExtResource("3")
+projectile_scene = ExtResource("2")
+debug_color = Color(0.32, 0.95, 1, 1)

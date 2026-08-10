@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+spell_id = "drowning_puddle"
+display_name = "Drowning Puddle"
+description = "Creates a deep puddle that halves speed and increases Water damage taken."
+primary_element = "water"
+spell_family = "water"
+spell_form = "area"
+behavior_type = "puddle"
+base_power = 13.0
+base_mana_cost = 31.0
+base_cast_time_seconds = 0.45
+base_cooldown_seconds = 4.5
+base_range_meters = 14.0
+projectile_speed_meters_per_second = 0.0
+base_area_radius_meters = 4.5
+status_effect = "slow"
+effect_duration_seconds = 8
+effect_power = 0.3
+field_duration_seconds = 8
+secondary_power = 0
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "area", "split", "status", "family", "utility", "duration", "collision", "targeting"])
+debug_color = Color(0.05, 0.48, 1, 1)

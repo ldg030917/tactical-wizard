@@ -1,0 +1,31 @@
+[gd_scene load_steps=6 format=3]
+[sub_resource type="StandardMaterial3D" id="BodyMat"]
+albedo_color = Color(0.55, 0.37, 0.47, 1)
+roughness = 0.9
+[sub_resource type="StandardMaterial3D" id="SnoutMat"]
+albedo_color = Color(0.37, 0.28, 0.22, 1)
+[sub_resource type="SphereMesh" id="Body"]
+material = SubResource("BodyMat")
+radius = 0.39
+height = 0.84
+radial_segments = 12
+rings = 6
+[sub_resource type="SphereMesh" id="Head"]
+material = SubResource("BodyMat")
+radius = 0.28
+height = 0.53
+radial_segments = 12
+rings = 6
+[sub_resource type="BoxMesh" id="Snout"]
+material = SubResource("SnoutMat")
+size = Vector3(0.34, 0.14, 0.35)
+[node name="PlaceholderMeleeCreatureModel" type="Node3D"]
+[node name="Body" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.74, 0)
+mesh = SubResource("Body")
+[node name="Head" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.13, -0.05)
+mesh = SubResource("Head")
+[node name="Snout" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.08, -0.38)
+mesh = SubResource("Snout")

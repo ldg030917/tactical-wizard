@@ -1,0 +1,25 @@
+[gd_scene format=3]
+[node name="LootWindow" type="PanelContainer"]
+visible = false
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -440.0
+offset_top = -530.0
+offset_right = -20.0
+offset_bottom = -110.0
+grow_horizontal = 0
+grow_vertical = 0
+[node name="Layout" type="VBoxContainer" parent="."]
+[node name="Title" type="Label" parent="Layout"]
+unique_name_in_owner = true
+text = "CONTAINER"
+theme_override_font_sizes/font_size = 20
+[node name="LootRows" type="VBoxContainer" parent="Layout"]
+unique_name_in_owner = true
+size_flags_vertical = 3
+[node name="CloseButton" type="Button" parent="Layout"]
+unique_name_in_owner = true
+text = "Close"

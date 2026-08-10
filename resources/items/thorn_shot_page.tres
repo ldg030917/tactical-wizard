@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/item_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/spells/thorn_shot.tres" type="Resource" id="2"]
+[ext_resource path="res://assets/placeholders/icons/grass.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+item_id = "thorn_shot_page"
+display_name = "Formula Page: Thorn Shot"
+description = "Grass - Projectile - Thorn. A completed page installable at the Base."
+category = "spell"
+rarity = "common"
+weight_kg = 0.1
+value_crowns = 105
+base_spell = ExtResource("2")
+primary_element = "grass"
+item_family = "thorn"
+placeholder_icon = ExtResource("3")
+debug_color = Color(0.35, 0.8, 0.35, 1)

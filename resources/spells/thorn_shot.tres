@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[ext_resource path="res://scenes/spells/spell_projectile.tscn" type="PackedScene" id="2"]
+[ext_resource path="res://assets/placeholders/icons/grass.svg" type="Texture2D" id="3"]
+[resource]
+script = ExtResource("1")
+spell_id = "thorn_shot"
+display_name = "Thorn Shot"
+description = "A Grass projectile that punishes Water-aligned targets."
+primary_element = "grass"
+spell_family = "thorn"
+base_power = 30.0
+base_mana_cost = 19.0
+base_cast_time_seconds = 0.36
+base_cooldown_seconds = 0.7
+base_range_meters = 15.0
+projectile_speed_meters_per_second = 15.0
+base_area_radius_meters = 0.55
+status_effect = "poison"
+effect_duration_seconds = 4.0
+effect_power = 2.0
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "split", "status"])
+placeholder_icon = ExtResource("3")
+projectile_scene = ExtResource("2")
+debug_color = Color(0.35, 0.8, 0.35, 1)

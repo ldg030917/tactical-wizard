@@ -1,0 +1,99 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://scripts/ui/trajectory_preview.gd" type="Script" id="1"]
+
+[node name="SpellbookUI" type="PanelContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Layout" type="VBoxContainer" parent="."]
+
+[node name="Title" type="Label" parent="Layout"]
+unique_name_in_owner = true
+text = "SPELL WORKSHOP — Ashbound Grimoire"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 22
+
+[node name="Instructions" type="Label" parent="Layout"]
+text = "Configure the selected page on the left. Drag formulas and compatible runes from the library on the right."
+autowrap_mode = 2
+
+[node name="Body" type="HSplitContainer" parent="Layout"]
+size_flags_vertical = 3
+split_offset = 500
+
+[node name="ConfigurationPanel" type="PanelContainer" parent="Layout/Body"]
+custom_minimum_size = Vector2(490, 0)
+
+[node name="Configuration" type="VBoxContainer" parent="Layout/Body/ConfigurationPanel"]
+
+[node name="ConfigurationTitle" type="Label" parent="Layout/Body/ConfigurationPanel/Configuration"]
+text = "PAGE CONFIGURATION"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 17
+
+[node name="PageSelector" type="HBoxContainer" parent="Layout/Body/ConfigurationPanel/Configuration"]
+custom_minimum_size = Vector2(0, 64)
+
+[node name="Page1Button" type="Button" parent="Layout/Body/ConfigurationPanel/Configuration/PageSelector"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 64)
+size_flags_horizontal = 3
+text = "Page 1"
+
+[node name="Page2Button" type="Button" parent="Layout/Body/ConfigurationPanel/Configuration/PageSelector"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 64)
+size_flags_horizontal = 3
+text = "Page 2"
+
+[node name="Page3Button" type="Button" parent="Layout/Body/ConfigurationPanel/Configuration/PageSelector"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 64)
+size_flags_horizontal = 3
+text = "Page 3"
+
+[node name="TrajectoryPreview" type="Control" parent="Layout/Body/ConfigurationPanel/Configuration"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 190)
+mouse_filter = 2
+script = ExtResource("1")
+
+[node name="ResultingStats" type="Label" parent="Layout/Body/ConfigurationPanel/Configuration"]
+unique_name_in_owner = true
+text = "Calculated spell statistics"
+autowrap_mode = 2
+
+[node name="CompatibilityWarning" type="Label" parent="Layout/Body/ConfigurationPanel/Configuration"]
+unique_name_in_owner = true
+modulate = Color(1, 0.57, 0.35, 1)
+autowrap_mode = 2
+
+[node name="SocketBoard" type="VBoxContainer" parent="Layout/Body/ConfigurationPanel/Configuration"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 142)
+
+[node name="LibraryPanel" type="PanelContainer" parent="Layout/Body"]
+custom_minimum_size = Vector2(490, 0)
+size_flags_horizontal = 3
+
+[node name="Library" type="VBoxContainer" parent="Layout/Body/LibraryPanel"]
+
+[node name="LibraryTitle" type="Label" parent="Layout/Body/LibraryPanel/Library"]
+text = "FORMULA & RUNE LIBRARY"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 17
+
+[node name="LibraryHint" type="Label" parent="Layout/Body/LibraryPanel/Library"]
+text = "Drag a card into its matching socket. Formula installation returns the old page and its runes to storage."
+autowrap_mode = 2
+
+[node name="Scroll" type="ScrollContainer" parent="Layout/Body/LibraryPanel/Library"]
+size_flags_vertical = 3
+
+[node name="WorkshopRows" type="VBoxContainer" parent="Layout/Body/LibraryPanel/Library/Scroll"]
+unique_name_in_owner = true
+size_flags_horizontal = 3

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=4 format=3]
+[ext_resource path="res://scripts/data/item_data.gd" type="Script" id="1"]
+[ext_resource path="res://icon.svg" type="Texture2D" id="2"]
+[ext_resource path="res://scenes/items/loot_pickup.tscn" type="PackedScene" id="3"]
+[resource]
+script = ExtResource("1")
+item_id = "ammo_shell"
+display_name = "Shells"
+description = "Heavy close-range ammunition."
+category = "ammo"
+stack_size = 24
+inventory_slots = 1
+weight_kg = 0.05
+value_crowns = 7
+placeholder_icon = ExtResource("2")
+placeholder_world_model = ExtResource("3")
+debug_color = Color(0.74, 0.45, 0.41, 1)

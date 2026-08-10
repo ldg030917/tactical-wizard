@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SpellModifierData" format=3 uid="uid://b6jitrlh8le11"]
+
+[ext_resource type="Script" uid="uid://bv1xj2tsiw2jh" path="res://scripts/data/spell_modifier_data.gd" id="1"]
+[ext_resource type="Texture2D" path="res://icon.svg" id="2"]
+
+[resource]
+script = ExtResource("1")
+modifier_id = "increased_area"
+display_name = "Expansive Mandala"
+description = "Widens an impact burst or persistent circle."
+modifier_category = "area"
+compatible_spell_ids = Array[String](["fireball", "healing_circle"])
+mana_cost_multiplier = 1.35
+cast_time_multiplier = 1.12
+area_multiplier = 1.65
+placeholder_icon = ExtResource("2")
+debug_color = Color(0.86, 0.41, 1, 1)

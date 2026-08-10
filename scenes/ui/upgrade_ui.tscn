@@ -1,0 +1,20 @@
+[gd_scene format=3]
+[node name="UpgradeUI" type="PanelContainer"]
+[node name="Layout" type="VBoxContainer" parent="."]
+[node name="Title" type="Label" parent="Layout"]
+text = "BASE UPGRADES"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 26
+[node name="Description" type="Label" parent="Layout"]
+text = "Select a refuge facility to compare its current and next level."
+[node name="Body" type="HSplitContainer" parent="Layout"]
+size_flags_vertical = 3
+split_offset = 410
+[node name="ChoicesPanel" type="PanelContainer" parent="Layout/Body"]
+custom_minimum_size = Vector2(400, 0)
+[node name="UpgradeRows" type="VBoxContainer" parent="Layout/Body/ChoicesPanel"]
+unique_name_in_owner = true
+[node name="DetailPanel" type="PanelContainer" parent="Layout/Body"]
+size_flags_horizontal = 3
+[node name="UpgradeDetail" type="VBoxContainer" parent="Layout/Body/DetailPanel"]
+unique_name_in_owner = true

@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=5 format=3]
+[ext_resource path="res://scripts/data/enemy_data.gd" type="Script" id="1"]
+[ext_resource path="res://resources/spells/fireball.tres" type="Resource" id="2"]
+[ext_resource path="res://resources/loot_tables/high_value.tres" type="Resource" id="3"]
+[ext_resource path="res://scenes/enemies/visuals/ash_mage_visual.tscn" type="PackedScene" id="4"]
+[resource]
+script = ExtResource("1")
+enemy_id = "caldera_archon"
+display_name = "Caldera Archon"
+behavior_type = "boss"
+primary_element = "fire"
+difficulty_tier = 3
+maximum_health = 240.0
+movement_speed = 2.5
+detection_range_meters = 21.0
+hearing_range_meters = 28.0
+attack_range_meters = 14.0
+attack_damage = 27.0
+attack_interval_seconds = 1.35
+prepared_spell = ExtResource("2")
+loot_table = ExtResource("3")
+elemental_resistance = 0.18
+visual_scene = ExtResource("4")
+debug_color = Color(0.95, 0.27, 0.09, 1)

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+[ext_resource path="res://scenes/base/station_base.tscn" type="PackedScene" id="1"]
+[node name="SpellTestingArea" instance=ExtResource("1")]
+station_id = "character"
+display_name = "Specialization Mentor"
+interaction_description = "Review vocations with"

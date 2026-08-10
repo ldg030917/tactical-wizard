@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CraftingRecipeData" load_steps=7 format=3]
+[ext_resource path="res://scripts/data/crafting_recipe_data.gd" type="Script" id="1"]
+[ext_resource path="res://scripts/data/craft_ingredient_data.gd" type="Script" id="2"]
+[ext_resource path="res://resources/items/arcane_dust.tres" type="Resource" id="3"]
+[ext_resource path="res://resources/items/mana_crystal.tres" type="Resource" id="4"]
+[ext_resource path="res://resources/items/mana_potion.tres" type="Resource" id="5"]
+[sub_resource type="Resource" id="I1"]
+script = ExtResource("2")
+item = ExtResource("3")
+quantity = 2
+[sub_resource type="Resource" id="I2"]
+script = ExtResource("2")
+item = ExtResource("4")
+[resource]
+script = ExtResource("1")
+recipe_id = "mana_tonic"
+display_name = "Distill Azure Mana Tonic"
+description = "Bind crystal aether into a stable field tonic."
+ingredients = Array[CraftIngredientData]([SubResource("I1"), SubResource("I2")])
+output_item = ExtResource("5")
+output_quantity = 2
+required_workbench_level = 1
+currency_cost = 8

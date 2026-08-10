@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BaseSpellData" format=3 uid="uid://bj2as46wc6oxp"]
+
+[ext_resource type="Script" uid="uid://cjmbi81to30oy" path="res://scripts/data/base_spell_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/spells/spell_projectile.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://icon.svg" id="3"]
+
+[resource]
+script = ExtResource("1")
+spell_id = "ice_spear"
+display_name = "Rime Lance"
+description = "A fast, accurate shard that slows creatures struck by its frozen edge."
+primary_element = "water"
+spell_family = "ice"
+base_power = 28.0
+base_mana_cost = 18.0
+base_cast_time_seconds = 0.28
+base_cooldown_seconds = 0.62
+base_range_meters = 19.0
+projectile_speed_meters_per_second = 20.0
+base_area_radius_meters = 0.45
+effect_duration_seconds = 3.5
+effect_power = 0.42
+status_effect = "slow"
+compatible_modifier_categories = Array[String](["range", "split"])
+placeholder_icon = ExtResource("3")
+projectile_scene = ExtResource("2")
+debug_color = Color(0.25, 0.77, 1, 1)

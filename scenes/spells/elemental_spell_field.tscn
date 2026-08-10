@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource path="res://scripts/spells/elemental_spell_field.gd" type="Script" id="1"]
+[sub_resource type="SphereShape3D" id="FieldShape"]
+radius = 2.0
+[sub_resource type="CylinderMesh" id="FieldMesh"]
+top_radius = 2.0
+bottom_radius = 2.0
+height = 0.08
+[sub_resource type="TorusMesh" id="RuneRing"]
+inner_radius = 0.82
+outer_radius = 1.0
+rings = 32
+ring_segments = 12
+
+[node name="ElementalSpellField" type="Area3D"]
+script = ExtResource("1")
+collision_layer = 0
+collision_mask = 4
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+unique_name_in_owner = true
+shape = SubResource("FieldShape")
+
+[node name="FieldMesh" type="MeshInstance3D" parent="."]
+unique_name_in_owner = true
+mesh = SubResource("FieldMesh")
+
+[node name="RuneRing" type="MeshInstance3D" parent="."]
+unique_name_in_owner = true
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("RuneRing")

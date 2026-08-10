@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/skill_data.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+skill_id = "casting_speed"
+display_name = "Rapid Incantation"
+description = "5% faster spell casting per rank"
+maximum_rank = 3
+benefit_per_rank = 5.0
+benefit_mode = "percent"

@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BaseSpellData" load_steps=2 format=3]
+[ext_resource path="res://scripts/data/base_spell_data.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+spell_id = "chain_lightning"
+display_name = "Chain Lightning"
+description = "Lightning leaps through several nearby enemies with diminishing force."
+primary_element = "water"
+spell_family = "lightning"
+spell_form = "area"
+behavior_type = "chain"
+base_power = 54.0
+base_mana_cost = 42.0
+base_cast_time_seconds = 0.38
+base_cooldown_seconds = 4
+base_range_meters = 15.0
+projectile_speed_meters_per_second = 0.0
+base_area_radius_meters = 1
+status_effect = ""
+effect_duration_seconds = 0
+effect_power = 0
+field_duration_seconds = 0
+secondary_power = 0
+compatible_modifier_categories = Array[String](["damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "area", "split", "status", "family", "utility", "duration", "collision", "targeting"])
+debug_color = Color(0.18, 0.9, 1, 1)

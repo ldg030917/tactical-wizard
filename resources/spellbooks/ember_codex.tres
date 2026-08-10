@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SpellbookData" format=3 uid="uid://bpfo7v5bjaj3"]
+
+[ext_resource type="Script" uid="uid://dt15h5cc6olg8" path="res://scripts/data/spellbook_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/spells/spell_visual_placeholder.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://icon.svg" id="3"]
+
+[resource]
+script = ExtResource("1")
+spellbook_id = "ember_codex"
+display_name = "Ember-Thread Codex"
+description = "A rare heatproof codex whose rune binding accelerates prepared formulae."
+rarity = "rare"
+maximum_modifiers_per_page = 3
+casting_speed_multiplier = 1.12
+mana_efficiency_multiplier = 0.92
+weight_kg = 1.2
+placeholder_visual_scene = ExtResource("2")
+placeholder_icon = ExtResource("3")
+debug_color = Color(0.77, 0.19, 0.08, 1)
