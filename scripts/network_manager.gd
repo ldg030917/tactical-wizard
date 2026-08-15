@@ -12,15 +12,20 @@ signal load_raid_requested
 signal all_raid_clients_loaded
 
 const DEFAULT_PORT := 7000
+const DEFAULT_SERVER_ADDRESS := "158.180.84.54"
 const MAX_CLIENTS := 32
 const PING_INTERVAL_SECONDS := 1.0
+
+enum RaidLifecycle { LOBBY, LOADING, IN_RAID }
 
 var is_server_mode := false
 var is_connecting := false
 var ping_ms := -1
 var _ping_elapsed := 0.0
 var connected_peer_ids: Dictionary = {}
+var raid_members: Dictionary = {}
 var _raid_loading_peers: Dictionary = {}
+var raid_lifecycle := RaidLifecycle.LOBBY
 
 
 func _ready() -> void:
@@ -30,6 +35,9 @@ func _ready() -> void:
 	launch_args.append_array(OS.get_cmdline_user_args())
 	launch_args.append_array(OS.get_cmdline_args())
 	is_server_mode = "--server" in launch_args
+
+	if is_server_mode:
+		print("[SERVER] boot build=multiplayer-debug-2 args=%s" % str(launch_args))
 
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
@@ -67,14 +75,20 @@ func start_server(port: int = DEFAULT_PORT, max_clients: int = MAX_CLIENTS) -> E
 
 	multiplayer.multiplayer_peer = peer
 	var message := "Dedicated server listening on UDP port %d" % port
-	print(message)
+	print("[SERVER] multiplayer peer created")
+	print("[SERVER] listening udp=%d" % port)
+	print("[STATE] server raid_lifecycle=LOBBY")
 	connection_status_changed.emit(message)
 	session_state_changed.emit("SERVER")
 	server_started.emit()
 	return OK
 
 
-func connect_to_server(address: String, port: int = DEFAULT_PORT) -> Error:
+func connect_to_default_server() -> Error:
+	return connect_to_server(DEFAULT_SERVER_ADDRESS)
+
+
+func connect_to_server(address: String = DEFAULT_SERVER_ADDRESS, port: int = DEFAULT_PORT) -> Error:
 	if is_server_mode:
 		return ERR_UNAUTHORIZED
 
@@ -114,12 +128,16 @@ func request_raid_start() -> void:
 func server_raid_scene_ready() -> void:
 	if not multiplayer.is_server():
 		return
-	_raid_loading_peers = connected_peer_ids.duplicate()
-	print("[RAID] members=%s" % str(_raid_loading_peers.keys()))
-	for peer_id: int in _raid_loading_peers:
+	raid_members = connected_peer_ids.duplicate()
+	_raid_loading_peers = raid_members.duplicate()
+	raid_lifecycle = RaidLifecycle.LOADING
+	print("[STATE] server raid_lifecycle=LOADING")
+	print("[RAID] members=%s" % str(raid_members.keys()))
+	for peer_id: int in raid_members:
 		print("[RAID] sending load request peer=%d" % peer_id)
 		_load_raid_on_clients.rpc_id(peer_id)
 	if _raid_loading_peers.is_empty():
+		print("[RAID] no connected clients; spawning skipped")
 		all_raid_clients_loaded.emit()
 
 
@@ -127,6 +145,12 @@ func client_raid_scene_ready() -> void:
 	if is_connected_to_server():
 		print("[RAID] Client loaded scene peer=%d" % multiplayer.get_unique_id())
 		_client_raid_loaded.rpc_id(1)
+
+
+func server_mark_raid_started() -> void:
+	if multiplayer.is_server():
+		raid_lifecycle = RaidLifecycle.IN_RAID
+		print("[STATE] server raid_lifecycle=IN_RAID")
 
 
 func _report_connect_setup_failure(message: String, error: Error) -> Error:
@@ -149,15 +173,17 @@ func _stop_current_peer() -> void:
 func _on_peer_connected(peer_id: int) -> void:
 	if is_server_mode:
 		connected_peer_ids[peer_id] = true
-		print("Client connected. ID: %d" % peer_id)
+		print("[NETWORK] peer_connected=%d peers=%s" % [peer_id, str(connected_peer_ids.keys())])
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	if is_server_mode:
 		connected_peer_ids.erase(peer_id)
-		_raid_loading_peers.erase(peer_id)
-		print("Client disconnected. ID: %d" % peer_id)
-		if _raid_loading_peers.is_empty():
+		print("[NETWORK] peer_disconnected=%d peers=%s" % [peer_id, str(connected_peer_ids.keys())])
+		if raid_lifecycle == RaidLifecycle.LOADING and _raid_loading_peers.erase(peer_id):
+			print("[RAID] peer=%d disconnected while loading; ready=%d/%d" % [peer_id, raid_members.size() - _raid_loading_peers.size(), raid_members.size()])
+		if raid_lifecycle == RaidLifecycle.LOADING and _raid_loading_peers.is_empty():
+			print("[RAID] all remaining members loaded; spawning players")
 			all_raid_clients_loaded.emit()
 
 
@@ -195,6 +221,9 @@ func _request_raid_start() -> void:
 		return
 	var requester := multiplayer.get_remote_sender_id()
 	if requester in connected_peer_ids:
+		if raid_lifecycle != RaidLifecycle.LOBBY:
+			print("[RAID] ignored start request peer=%d lifecycle=%d" % [requester, raid_lifecycle])
+			return
 		print("[RAID] start requested by peer=%d" % requester)
 		raid_start_requested.emit()
 
@@ -215,7 +244,7 @@ func _client_raid_loaded() -> void:
 		print("[RAID] ignored unexpected ready peer=%d" % loaded_peer)
 		return
 	_raid_loading_peers.erase(loaded_peer)
-	print("[RAID] peer=%d loaded; ready=%d/%d" % [loaded_peer, connected_peer_ids.size() - _raid_loading_peers.size(), connected_peer_ids.size()])
+	print("[RAID] peer=%d loaded; ready=%d/%d" % [loaded_peer, raid_members.size() - _raid_loading_peers.size(), raid_members.size()])
 	if _raid_loading_peers.is_empty():
 		print("[RAID] all members loaded; spawning players")
 		all_raid_clients_loaded.emit()

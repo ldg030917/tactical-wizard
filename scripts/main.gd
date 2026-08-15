@@ -47,7 +47,9 @@ func _ready() -> void:
 		return
 
 	connect_button.pressed.connect(_connect_to_server)
-	server_address_input.text_submitted.connect(func(_text: String) -> void: _connect_to_server())
+	# Prototype clients always use NetworkManager.DEFAULT_SERVER_ADDRESS. Keep the
+	# field out of the normal flow so stale UI text can never alter the endpoint.
+	server_address_input.visible = false
 	NetworkManager.connection_status_changed.connect(_set_connection_status)
 	NetworkManager.client_connected.connect(_on_client_connected)
 	NetworkManager.client_connection_failed.connect(_on_client_connection_failed)
@@ -62,7 +64,7 @@ func _ready() -> void:
 
 func _connect_to_server() -> void:
 	connect_button.disabled = true
-	var error := NetworkManager.connect_to_server(server_address_input.text)
+	var error := NetworkManager.connect_to_default_server()
 	if error != OK:
 		connect_button.disabled = false
 
@@ -164,7 +166,8 @@ func _on_client_load_raid_requested() -> void:
 func _on_all_raid_clients_loaded() -> void:
 	if active_area is RaidScene:
 		print("[RAID] Server starting player spawn")
-		(active_area as RaidScene).begin_network_raid(NetworkManager.connected_peer_ids.keys())
+		(active_area as RaidScene).begin_network_raid(NetworkManager.raid_members.keys())
+		NetworkManager.server_mark_raid_started()
 
 func travel_to_region(region_id: String) -> bool:
 	if not active_area is RaidScene:

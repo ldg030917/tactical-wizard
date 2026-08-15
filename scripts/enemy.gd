@@ -235,7 +235,7 @@ func _attack(distance: float) -> void:
 		return
 	if enemy_type in ["monster", "creature"]:
 		if distance <= attack_range + 0.35:
-			player.take_damage(damage, global_position, 0.24, primary_element, "enemy:%s" % enemy_type)
+			player.take_damage(damage, global_position, 0.24, primary_element, "enemy:%s#%d" % [enemy_type, get_instance_id()])
 		attack_cooldown = attack_interval
 		return
 	var raid: Node = _raid_scene()

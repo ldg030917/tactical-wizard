@@ -87,10 +87,12 @@ var nearby_interaction: String = ""
 var active_healing_circle: HealingCircle
 var burn_remaining: float = 0.0
 var burn_damage_per_second: float = 0.0
+var burn_source_label := "status:burn"
 var slow_remaining: float = 0.0
 var slow_multiplier: float = 1.0
 var poison_remaining: float = 0.0
 var poison_damage_per_second: float = 0.0
+var poison_source_label := "status:poison"
 var exhaustion_remaining: float = 0.0
 var walk_time: float = 0.0
 var recoil_amount: float = 0.0
@@ -632,10 +634,7 @@ func take_damage(amount: float, source: Vector3 = Vector3.ZERO, bleed_chance: fl
 		_show_message("ELEMENTAL WEAKNESS: %s overcomes %s" % [attack_element.to_upper(), defense_element.to_upper()])
 	var health_before := health
 	health = maxf(0.0, health - reduced)
-	var now_seconds := Time.get_ticks_msec() / 1000.0
-	if network_enabled and multiplayer.is_server() and now_seconds - _last_network_damage_log_time >= 0.5:
-		print("[DAMAGE] peer=%d source=%s element=%s amount=%.2f hp=%.2f->%.2f" % [network_peer_id, source_label, attack_element, reduced, health_before, health])
-		_last_network_damage_log_time = now_seconds
+	_record_network_damage(source_label, attack_element, reduced, health_before, health)
 	last_damage_time = Time.get_ticks_msec() / 1000.0
 	mana_regen_delay = maxf(mana_regen_delay, 3.0)
 	if element == "physical" and randf() < bleed_chance:
@@ -649,16 +648,30 @@ func take_damage(amount: float, source: Vector3 = Vector3.ZERO, bleed_chance: fl
 	if health <= 0.0:
 		_die()
 
-func apply_status(status_id: String, duration: float, power: float) -> void:
+func apply_status(status_id: String, duration: float, power: float, source_label: String = "") -> void:
 	if status_id == "burn":
 		burn_remaining = maxf(burn_remaining, duration)
 		burn_damage_per_second = maxf(burn_damage_per_second, power * (1.0 - fire_resistance))
+		if not source_label.is_empty():
+			burn_source_label = source_label
 	elif status_id == "slow":
 		slow_remaining = maxf(slow_remaining, duration)
 		slow_multiplier = clampf(1.0 - power * (1.0 - ice_resistance), 0.45, 1.0)
 	elif status_id == "poison":
 		poison_remaining = maxf(poison_remaining, duration)
 		poison_damage_per_second = maxf(poison_damage_per_second, power)
+		if not source_label.is_empty():
+			poison_source_label = source_label
+
+
+func _record_network_damage(source_label: String, element: String, amount: float, health_before: float, health_after: float) -> void:
+	if not network_enabled or not multiplayer.is_server():
+		return
+	var now_seconds := Time.get_ticks_msec() / 1000.0
+	if now_seconds - _last_network_damage_log_time < 0.5:
+		return
+	print("[DAMAGE] peer=%d source=%s element=%s amount=%.2f hp=%.2f->%.2f" % [network_peer_id, source_label, element, amount, health_before, health_after])
+	_last_network_damage_log_time = now_seconds
 
 func _apply_random_injury(severity: float) -> void:
 	var body_parts: Array = injuries.keys()
@@ -681,8 +694,10 @@ func cleanse_statuses() -> void:
 	bleeding = false
 	burn_remaining = 0.0
 	burn_damage_per_second = 0.0
+	burn_source_label = "status:burn"
 	poison_remaining = 0.0
 	poison_damage_per_second = 0.0
+	poison_source_label = "status:poison"
 	slow_remaining = 0.0
 	slow_multiplier = 1.0
 
@@ -771,22 +786,30 @@ func _update_status(delta: float) -> void:
 			take_damage(2.0, Vector3.ZERO, 0.0, "physical", "bleeding")
 	if burn_remaining > 0.0:
 		burn_remaining -= delta
-		health = maxf(0.0, health - burn_damage_per_second * delta)
+		var burn_before := health
+		var burn_amount := burn_damage_per_second * delta
+		health = maxf(0.0, health - burn_amount)
+		_record_network_damage(burn_source_label, "fire", burn_amount, burn_before, health)
 		if health <= 0.0:
 			_die()
 	else:
 		burn_damage_per_second = 0.0
+		burn_source_label = "status:burn"
 	if slow_remaining > 0.0:
 		slow_remaining -= delta
 	else:
 		slow_multiplier = 1.0
 	if poison_remaining > 0.0:
 		poison_remaining -= delta
-		health = maxf(0.0, health - poison_damage_per_second * delta)
+		var poison_before := health
+		var poison_amount := poison_damage_per_second * delta
+		health = maxf(0.0, health - poison_amount)
+		_record_network_damage(poison_source_label, "poison", poison_amount, poison_before, health)
 		if health <= 0.0:
 			_die()
 	else:
 		poison_damage_per_second = 0.0
+		poison_source_label = "status:poison"
 
 func apply_exhaustion(duration: float = 3.0) -> void:
 	exhaustion_remaining = maxf(exhaustion_remaining, duration)
