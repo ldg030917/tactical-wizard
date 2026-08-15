@@ -249,6 +249,7 @@ func _attack(distance: float) -> void:
 	if raid != null and raid.has_method("spawn_enemy_spell"):
 		cast_glow.visible = true
 		var spell: BaseSpellData = enemy_data.prepared_spell if enemy_data != null else ContentRegistry.spells().get("fireball") as BaseSpellData
+		print("[ENEMY] cast enemy=%s magic=%s target=%d" % [network_enemy_id if not network_enemy_id.is_empty() else str(get_instance_id()), spell.spell_id if spell != null else "unknown", player.network_peer_id])
 		raid.spawn_enemy_spell(self, spell, cast_marker.global_position, player.global_position, damage)
 		if enemy_type == "boss" and raid.has_method("notify_spell_cast"):
 			raid.notify_spell_cast(global_position, 34.0)

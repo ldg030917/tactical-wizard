@@ -99,6 +99,10 @@ var recoil_amount: float = 0.0
 var injuries: Dictionary = {"head":0.0, "torso":0.0, "left_arm":0.0, "right_arm":0.0, "left_leg":0.0, "right_leg":0.0}
 var last_element_feedback: String = ""
 var _last_network_damage_log_time := -INF
+var _network_aim_yaw := 0.0
+var _network_aim_initialized := false
+var _local_snapshot_rotation_suppressed_logged := false
+const NETWORK_AIM_MOUSE_SENSITIVITY := 0.006
 
 @onready var visual: Node3D = get_node(visual_root_path) as Node3D
 @onready var wand_socket: Node3D = get_node(wand_socket_path) as Node3D
@@ -168,7 +172,10 @@ func _initialize_local_network_player() -> void:
 	# _ready() for both the first and a late-joining Raid player.
 	camera.current = true
 	set_process_unhandled_input(true)
+	_network_aim_yaw = rotation.y
+	_network_aim_initialized = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	print("[AIM] local player initialized peer=%d snapshot_rotation_applied=false" % network_peer_id)
 
 
 func _initialize_remote_network_player() -> void:
@@ -178,6 +185,8 @@ func _initialize_remote_network_player() -> void:
 	set_process_unhandled_input(false)
 	if multiplayer.is_server():
 		visual.visible = false
+	else:
+		print("[AIM] remote player initialized peer=%d snapshot_rotation_applied=true" % network_peer_id)
 
 func _physics_process(delta: float) -> void:
 	if network_enabled:
@@ -268,6 +277,9 @@ func _network_physics_process(delta: float) -> void:
 func _handle_network_input(event: InputEvent) -> void:
 	if dead or not is_local_network_player():
 		return
+	if event is InputEventMouseMotion:
+		_network_aim_yaw -= (event as InputEventMouseMotion).relative.x * NETWORK_AIM_MOUSE_SENSITIVITY
+		return
 	if event.is_action_pressed("spell_page_1"):
 		select_spell_page(0)
 	elif event.is_action_pressed("spell_page_2"):
@@ -333,7 +345,11 @@ func receive_network_snapshot(snapshot: Dictionary) -> void:
 	if is_local_network_player():
 		var authoritative_position: Vector3 = snapshot.get("position", global_position)
 		global_position = global_position.lerp(authoritative_position, 0.35)
-		rotation.y = lerp_angle(rotation.y, float(snapshot.get("rotation_y", rotation.y)), 0.35)
+		# The local body yaw is driven by local mouse input and submitted to the
+		# server. Applying server yaw again here created a continuous tug-of-war.
+		if not _local_snapshot_rotation_suppressed_logged:
+			print("[AIM] peer=%d local=true snapshot_rotation_applied=false" % network_peer_id)
+			_local_snapshot_rotation_suppressed_logged = true
 		health = float(snapshot.get("health", health))
 		mana = float(snapshot.get("mana", mana))
 		dead = bool(snapshot.get("dead", dead))
@@ -478,6 +494,15 @@ func _apply_movement_input(input: Vector2, sprint_pressed: bool, crouch_pressed:
 
 func _update_aim() -> void:
 	if camera == null:
+		return
+	if network_enabled and is_local_network_player():
+		if not _network_aim_initialized:
+			_network_aim_yaw = rotation.y
+			_network_aim_initialized = true
+		var forward := Vector3(-sin(_network_aim_yaw), 0.0, -cos(_network_aim_yaw))
+		aim_point = global_position + forward * 20.0
+		rotation.y = _network_aim_yaw
+		_update_preview()
 		return
 	var mouse: Vector2 = get_viewport().get_mouse_position()
 	var origin: Vector3 = camera.project_ray_origin(mouse)
