@@ -227,6 +227,10 @@ func _network_physics_process(delta: float) -> void:
 	if is_local_network_player():
 		if dead:
 			return
+		var root: Node = get_tree().current_scene
+		if root.has_method("is_local_ui_open") and root.is_local_ui_open():
+			velocity = Vector3.ZERO
+			return
 		_update_aim()
 		_update_movement(delta) # local prediction; server snapshots reconcile it.
 		_update_camera(delta)
@@ -258,6 +262,14 @@ func _handle_network_input(event: InputEvent) -> void:
 			request_spell_cast.rpc_id(1, selected_page, aim_point)
 	elif event.is_action_pressed("dagger_attack"):
 		request_dagger_attack.rpc_id(1)
+	elif event.is_action_pressed("inventory") and in_raid:
+		var raid: Node = _gameplay_area()
+		if raid.has_method("toggle_inventory"):
+			raid.toggle_inventory()
+	elif event.is_action_pressed("pause_game"):
+		var root: Node = get_tree().current_scene
+		if root.has_method("toggle_pause"):
+			root.toggle_pause()
 
 
 @rpc("any_peer", "call_remote", "unreliable", 1)

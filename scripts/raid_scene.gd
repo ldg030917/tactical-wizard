@@ -58,6 +58,9 @@ var raid_complete: bool = false
 var grass_wall_refresh_remaining: float = 0.0
 var grass_wall_generation: int = 0
 var explosion_devastated: bool = false
+var network_players: Dictionary = {}
+var network_snapshot_elapsed := 0.0
+var network_raid_active := false
 
 const GRASS_WALL_PLACEMENTS: Array[Dictionary] = [
 	{"position":Vector3(-12, 1.4, -4), "rotation":0.0},
@@ -73,6 +76,9 @@ func _ready() -> void:
 	kills = GameState.raid_kills
 	_configure_weather()
 	_configure_region()
+	if NetworkManager.is_network_game():
+		_setup_network_raid()
+		return
 	_spawn_player()
 	_activate_containers()
 	_spawn_editor_placed_loot()
@@ -80,6 +86,107 @@ func _ready() -> void:
 	hud.configure(self, player, weather)
 	if region_id != REGION_GRAPH.ENTRY_REGION_ID:
 		hud.set_extraction_status("RETURN TO THE NEUTRAL REGION TO EXTRACT")
+
+
+func _setup_network_raid() -> void:
+	# Clients load the same static raid scene, but only the server simulates
+	# actors and creates player characters after every client reports ready.
+	hud.visible = false
+	if multiplayer.is_server():
+		multiplayer.peer_disconnected.connect(_on_network_raid_peer_disconnected)
+		_spawn_editor_placed_loot()
+		_spawn_editor_placed_enemies()
+
+
+func begin_network_raid(peer_ids: Array) -> void:
+	if not multiplayer.is_server() or network_raid_active:
+		return
+	network_raid_active = true
+	for peer_value: Variant in peer_ids:
+		var peer_id := int(peer_value)
+		var offset_index := network_players.size()
+		var spawn_position := player_spawn.global_position + Vector3(float(offset_index % 3) * 1.25, 0.0, float(offset_index / 3) * 1.25)
+		_create_network_raid_player(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
+		spawn_network_raid_player.rpc(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
+	print("[RAID] Spawned %d network players" % network_players.size())
+
+
+func _process(delta: float) -> void:
+	if NetworkManager.is_network_game():
+		_process_network_raid(delta)
+		return
+	_update_grass_wall_cycle(delta)
+	if player != null:
+		_update_visibility()
+
+
+func _process_network_raid(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
+	_update_grass_wall_cycle(delta)
+	network_snapshot_elapsed += delta
+	if network_snapshot_elapsed < 1.0 / 20.0:
+		return
+	network_snapshot_elapsed = 0.0
+	var states: Array[Dictionary] = []
+	for peer_id: int in network_players:
+		var network_player := network_players[peer_id] as PlayerController
+		if is_instance_valid(network_player):
+			states.append({"peer_id": peer_id, "position": network_player.global_position, "rotation_y": network_player.rotation.y, "health": network_player.health, "mana": network_player.mana})
+	receive_network_raid_snapshots.rpc(states)
+
+
+func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> PlayerController:
+	if network_players.has(peer_id):
+		return network_players[peer_id] as PlayerController
+	var network_player := player_scene.instantiate() as PlayerController
+	network_player.name = "Player_%d" % peer_id
+	network_player.in_raid = true
+	network_player.configure_network(peer_id)
+	runtime_actors.add_child(network_player)
+	network_player.global_position = spawn_position
+	network_player.rotation.y = spawn_rotation_y
+	network_players[peer_id] = network_player
+	if not multiplayer.is_server() and peer_id == multiplayer.get_unique_id():
+		player = network_player
+		hud.visible = true
+		hud.configure(self, player, weather)
+		print("[PLAYER] Local player initialized peer=%d" % peer_id)
+	return network_player
+
+
+func _on_network_raid_peer_disconnected(peer_id: int) -> void:
+	var network_player := network_players.get(peer_id) as PlayerController
+	network_players.erase(peer_id)
+	if is_instance_valid(network_player):
+		network_player.queue_free()
+	remove_network_raid_player.rpc(peer_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func spawn_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> void:
+	if not multiplayer.is_server():
+		_create_network_raid_player(peer_id, spawn_position, spawn_rotation_y)
+
+
+@rpc("authority", "call_remote", "reliable")
+func remove_network_raid_player(peer_id: int) -> void:
+	if multiplayer.is_server():
+		return
+	var network_player := network_players.get(peer_id) as PlayerController
+	network_players.erase(peer_id)
+	if is_instance_valid(network_player):
+		network_player.queue_free()
+
+
+@rpc("authority", "call_remote", "unreliable", 1)
+func receive_network_raid_snapshots(states: Array[Dictionary]) -> void:
+	if multiplayer.is_server():
+		return
+	for state: Dictionary in states:
+		var network_player := network_players.get(int(state.get("peer_id", 0))) as PlayerController
+		if is_instance_valid(network_player):
+			network_player.receive_network_snapshot(state)
 
 func _configure_region() -> void:
 	var environment := world_environment.environment.duplicate() as Environment
@@ -112,11 +219,6 @@ func _spawn_region_hazards() -> void:
 	elif hazard_type == "temporary_grass_walls" and temporary_grass_wall_scene != null:
 		grass_wall_refresh_remaining = grass_wall_refresh_seconds
 		_refresh_grass_walls()
-
-func _process(delta: float) -> void:
-	_update_grass_wall_cycle(delta)
-	if player != null:
-		_update_visibility()
 
 func _update_grass_wall_cycle(delta: float) -> void:
 	if explosion_devastated or hazard_type != "temporary_grass_walls" or temporary_grass_wall_scene == null:

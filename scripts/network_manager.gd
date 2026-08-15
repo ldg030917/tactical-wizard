@@ -7,6 +7,9 @@ signal client_connected
 signal client_connection_failed(message: String)
 signal server_started
 signal ping_updated(milliseconds: int)
+signal raid_start_requested
+signal load_raid_requested
+signal all_raid_clients_loaded
 
 const DEFAULT_PORT := 7000
 const MAX_CLIENTS := 32
@@ -16,6 +19,8 @@ var is_server_mode := false
 var is_connecting := false
 var ping_ms := -1
 var _ping_elapsed := 0.0
+var connected_peer_ids: Dictionary = {}
+var _raid_loading_peers: Dictionary = {}
 
 
 func _ready() -> void:
@@ -100,6 +105,25 @@ func is_network_game() -> bool:
 	return is_server_mode or is_connected_to_server()
 
 
+func request_raid_start() -> void:
+	if is_connected_to_server():
+		_request_raid_start.rpc_id(1)
+
+
+func server_raid_scene_ready() -> void:
+	if not multiplayer.is_server():
+		return
+	_raid_loading_peers = connected_peer_ids.duplicate()
+	_load_raid_on_clients.rpc()
+	if _raid_loading_peers.is_empty():
+		all_raid_clients_loaded.emit()
+
+
+func client_raid_scene_ready() -> void:
+	if is_connected_to_server():
+		_client_raid_loaded.rpc_id(1)
+
+
 func _report_connect_setup_failure(message: String, error: Error) -> Error:
 	print(message)
 	connection_status_changed.emit(message)
@@ -119,12 +143,17 @@ func _stop_current_peer() -> void:
 
 func _on_peer_connected(peer_id: int) -> void:
 	if is_server_mode:
+		connected_peer_ids[peer_id] = true
 		print("Client connected. ID: %d" % peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	if is_server_mode:
+		connected_peer_ids.erase(peer_id)
+		_raid_loading_peers.erase(peer_id)
 		print("Client disconnected. ID: %d" % peer_id)
+		if _raid_loading_peers.is_empty():
+			all_raid_clients_loaded.emit()
 
 
 func _on_connected_to_server() -> void:
@@ -153,6 +182,27 @@ func _on_server_disconnected() -> void:
 	connection_status_changed.emit(message)
 	session_state_changed.emit("OFFLINE")
 	_stop_current_peer()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_raid_start() -> void:
+	if multiplayer.is_server() and multiplayer.get_remote_sender_id() in connected_peer_ids:
+		raid_start_requested.emit()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _load_raid_on_clients() -> void:
+	if is_connected_to_server():
+		load_raid_requested.emit()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _client_raid_loaded() -> void:
+	if not multiplayer.is_server():
+		return
+	_raid_loading_peers.erase(multiplayer.get_remote_sender_id())
+	if _raid_loading_peers.is_empty():
+		all_raid_clients_loaded.emit()
 
 
 @rpc("any_peer", "call_remote", "unreliable")

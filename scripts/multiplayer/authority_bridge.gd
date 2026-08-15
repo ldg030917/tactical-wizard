@@ -38,4 +38,3 @@ func _validate_transaction(peer_id: int, transaction: Dictionary) -> bool:
 	processed_transaction_ids[transaction_id] = Time.get_unix_time_from_system()
 	validated_inventory_transaction.emit(peer_id, transaction)
 	return true
-

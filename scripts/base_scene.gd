@@ -5,6 +5,7 @@ const ELEMENTAL_SPELL_FIELD := preload("res://scenes/spells/elemental_spell_fiel
 
 @export_category("Runtime Scenes")
 @export var player_scene: PackedScene
+var local_lobby := false
 
 @export_category("Station Access")
 @export_range(1.5, 6.0, 0.1, "suffix:m") var station_access_radius: float = 3.1
@@ -23,7 +24,7 @@ var players_by_peer: Dictionary = {}
 var _snapshot_elapsed := 0.0
 
 func _ready() -> void:
-	if NetworkManager.is_network_game():
+	if NetworkManager.is_network_game() and not local_lobby:
 		_setup_network_world()
 		return
 	_spawn_player()
@@ -33,7 +34,7 @@ func _ready() -> void:
 	base_ui.close_station()
 
 func _process(_delta: float) -> void:
-	if NetworkManager.is_network_game():
+	if NetworkManager.is_network_game() and not local_lobby:
 		_process_network_world(_delta)
 		return
 	if player == null:
