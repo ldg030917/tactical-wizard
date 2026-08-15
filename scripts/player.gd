@@ -100,6 +100,7 @@ var injuries: Dictionary = {"head":0.0, "torso":0.0, "left_arm":0.0, "right_arm"
 var last_element_feedback: String = ""
 var _last_network_damage_log_time := -INF
 var _network_aim_yaw := 0.0
+var _network_aim_pitch := 0.0
 var _network_aim_initialized := false
 var _local_snapshot_rotation_suppressed_logged := false
 const NETWORK_AIM_MOUSE_SENSITIVITY := 0.006
@@ -279,6 +280,7 @@ func _handle_network_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion:
 		_network_aim_yaw -= (event as InputEventMouseMotion).relative.x * NETWORK_AIM_MOUSE_SENSITIVITY
+		_network_aim_pitch = clampf(_network_aim_pitch - (event as InputEventMouseMotion).relative.y * NETWORK_AIM_MOUSE_SENSITIVITY, -0.65, 0.65)
 		return
 	if event.is_action_pressed("spell_page_1"):
 		select_spell_page(0)
@@ -292,6 +294,7 @@ func _handle_network_input(event: InputEvent) -> void:
 		if active_combat_slot == 3:
 			request_dagger_attack.rpc_id(1)
 		else:
+			_log_network_cast_aim()
 			request_spell_cast.rpc_id(1, selected_page, aim_point)
 	elif event.is_action_pressed("dagger_attack"):
 		request_dagger_attack.rpc_id(1)
@@ -332,11 +335,20 @@ func request_spell_cast(page_index: int, requested_target: Vector3) -> void:
 	var config := current_spell_config()
 	if config == null or not config.valid:
 		return
-	var offset := requested_target - global_position
-	offset.y = 0.0
+	var offset := requested_target - cast_origin.global_position
 	if offset.length() > config.range_meters:
-		requested_target = global_position + offset.normalized() * config.range_meters
+		requested_target = cast_origin.global_position + offset.normalized() * config.range_meters
+	var projectile_direction := (requested_target - cast_origin.global_position).normalized()
+	print("[AIM] server cast peer=%d muzzle=%s target=%s projectile_dir=%s" % [network_peer_id, str(cast_origin.global_position), str(requested_target), str(projectile_direction)])
 	cast_selected_spell_immediate(requested_target)
+
+
+func _log_network_cast_aim() -> void:
+	if camera == null or cast_origin == null:
+		return
+	var camera_forward := -camera.global_transform.basis.z
+	var projectile_direction := (aim_point - cast_origin.global_position).normalized()
+	print("[AIM] cast peer=%d camera_origin=%s camera_forward=%s muzzle=%s target=%s projectile_dir=%s" % [network_peer_id, str(camera.global_position), str(camera_forward), str(cast_origin.global_position), str(aim_point), str(projectile_direction)])
 
 
 func receive_network_snapshot(snapshot: Dictionary) -> void:
@@ -522,7 +534,32 @@ func _update_camera(delta: float) -> void:
 	look_offset = look_offset.limit_length(3.0) * aim_look_ahead
 	var desired: Vector3 = global_position + Vector3(0, camera_height, camera_distance) + look_offset
 	camera.global_position = camera.global_position.lerp(desired, 1.0 - exp(-delta * 6.5))
-	camera.look_at(global_position + Vector3(0, 0.55, 0) + look_offset)
+	var look_target := global_position + Vector3(0, 0.55, 0) + look_offset
+	if network_enabled and is_local_network_player():
+		# Body owns yaw; the camera target owns local pitch. Neither value is
+		# overwritten by the server's movement snapshot.
+		look_target.y += tan(_network_aim_pitch) * 5.0
+	camera.look_at(look_target)
+	if network_enabled and is_local_network_player():
+		_update_network_camera_aim_target()
+
+
+func _update_network_camera_aim_target() -> void:
+	var viewport := get_viewport()
+	var screen_center := viewport.get_visible_rect().size * 0.5
+	var ray_origin := camera.project_ray_origin(screen_center)
+	var ray_direction := camera.project_ray_normal(screen_center)
+	var target_point := ray_origin + ray_direction * 60.0
+	if absf(ray_direction.y) > 0.001:
+		var ground_distance := -ray_origin.y / ray_direction.y
+		if ground_distance > 0.0:
+			target_point = ray_origin + ray_direction * ground_distance
+	aim_point = target_point
+	var flat_target := aim_point - global_position
+	flat_target.y = 0.0
+	if flat_target.length_squared() > 0.001:
+		_network_aim_yaw = atan2(-flat_target.x, -flat_target.z)
+		rotation.y = _network_aim_yaw
 
 func begin_cast() -> bool:
 	var config := current_spell_config()
@@ -603,7 +640,6 @@ func complete_cast() -> bool:
 			active_healing_circle = raid.spawn_healing_circle(self, config, cast_target)
 	elif config.behavior_type == "projectile":
 		var base_direction: Vector3 = cast_target - cast_origin.global_position
-		base_direction.y = 0.0
 		base_direction = base_direction.normalized()
 		if "beam" in config.behavior_tags and raid.has_method("cast_special_spell"):
 			raid.cast_special_spell(self, config, cast_origin.global_position, cast_target, base_direction, "beam")
@@ -861,9 +897,8 @@ func apply_exhaustion(duration: float = 3.0) -> void:
 	_show_message("EXHAUSTED - movement disabled for 3 seconds.")
 
 func _limited_aim_target(max_range: float) -> Vector3:
-	var flat: Vector3 = aim_point - global_position
-	flat.y = 0.0
-	return global_position + flat.limit_length(max_range)
+	var offset: Vector3 = aim_point - cast_origin.global_position
+	return cast_origin.global_position + offset.limit_length(max_range)
 
 func _update_preview() -> void:
 	if placement_preview == null or page_configs.is_empty():

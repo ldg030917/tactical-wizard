@@ -128,7 +128,8 @@ func _sync_network_world_to_peer(peer_id: int) -> void:
 		if is_instance_valid(enemy):
 			spawn_network_enemy.rpc_id(peer_id, _network_enemy_spawn_data(enemy))
 	for magic_id: String in network_projectile_spawn_data:
-		if network_projectiles.has(magic_id):
+		var projectile_ref: Variant = network_projectiles.get(magic_id)
+		if is_instance_valid(projectile_ref):
 			spawn_network_projectile.rpc_id(peer_id, network_projectile_spawn_data[magic_id])
 
 
@@ -164,8 +165,9 @@ func _process_network_raid(delta: float) -> void:
 	var projectile_states: Array[Dictionary] = []
 	var expired_magic_ids: Array[String] = []
 	for magic_id: String in network_projectiles:
-		var projectile := network_projectiles[magic_id] as SpellProjectile
-		if is_instance_valid(projectile) and not projectile.resolved:
+		var projectile_ref: Variant = network_projectiles.get(magic_id)
+		if is_instance_valid(projectile_ref) and not (projectile_ref as SpellProjectile).resolved:
+			var projectile := projectile_ref as SpellProjectile
 			projectile_states.append({"magic_id": magic_id, "position": projectile.global_position})
 		else:
 			expired_magic_ids.append(magic_id)
@@ -259,6 +261,7 @@ func _register_network_projectile(projectile: SpellProjectile, config: RuntimeSp
 	_next_network_magic_id += 1
 	projectile.network_magic_id = magic_id
 	network_projectiles[magic_id] = projectile
+	projectile.projectile_resolved.connect(_on_network_projectile_resolved)
 	var spawn_data := {
 		"magic_id": magic_id,
 		"scene_path": projectile.scene_file_path,
@@ -273,6 +276,16 @@ func _register_network_projectile(projectile: SpellProjectile, config: RuntimeSp
 	print("[MAGIC] server spawn id=%s caster=%s type=%s position=%s" % [magic_id, caster_label, config.base_spell.spell_id, str(start)])
 	for peer_id: int in NetworkManager.raid_members:
 		spawn_network_projectile.rpc_id(peer_id, spawn_data)
+
+
+func _on_network_projectile_resolved(magic_id: String, reason: String) -> void:
+	if not multiplayer.is_server() or not network_projectiles.has(magic_id):
+		return
+	network_projectiles.erase(magic_id)
+	network_projectile_spawn_data.erase(magic_id)
+	print("[PROJECTILE] despawn id=%s reason=%s" % [magic_id, reason])
+	for peer_id: int in NetworkManager.raid_members:
+		despawn_network_projectile.rpc_id(peer_id, magic_id, reason)
 
 
 func _on_network_raid_peer_disconnected(peer_id: int) -> void:
@@ -325,8 +338,12 @@ func spawn_network_projectile(spawn_data: Dictionary) -> void:
 	if multiplayer.is_server():
 		return
 	var magic_id := str(spawn_data.get("magic_id", ""))
-	if magic_id.is_empty() or network_projectiles.has(magic_id):
+	if magic_id.is_empty():
 		return
+	var existing: Variant = network_projectiles.get(magic_id)
+	if is_instance_valid(existing):
+		return
+	network_projectiles.erase(magic_id)
 	var scene := load(str(spawn_data.get("scene_path", ""))) as PackedScene
 	var config: RuntimeSpellConfig = _deserialize_spell_config(spawn_data.get("config", {}))
 	if scene == null or config == null:
@@ -342,7 +359,23 @@ func spawn_network_projectile(spawn_data: Dictionary) -> void:
 	projectile.global_position = start
 	projectile.configure_network_visual(magic_id, config, direction, str(spawn_data.get("team", "player")), target)
 	network_projectiles[magic_id] = projectile
+	projectile.projectile_resolved.connect(_on_network_projectile_replica_resolved)
 	print("[MAGIC] client replicated id=%s local_peer=%d type=%s position=%s" % [magic_id, multiplayer.get_unique_id(), config.base_spell.spell_id, str(start)])
+
+
+func _on_network_projectile_replica_resolved(magic_id: String, _reason: String) -> void:
+	network_projectiles.erase(magic_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func despawn_network_projectile(magic_id: String, reason: String) -> void:
+	if multiplayer.is_server():
+		return
+	var projectile_ref: Variant = network_projectiles.get(magic_id)
+	network_projectiles.erase(magic_id)
+	if is_instance_valid(projectile_ref):
+		(projectile_ref as SpellProjectile).queue_free()
+	print("[PROJECTILE] despawn id=%s reason=%s" % [magic_id, reason])
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -370,9 +403,9 @@ func receive_network_projectile_snapshots(states: Array[Dictionary]) -> void:
 	if multiplayer.is_server():
 		return
 	for state: Dictionary in states:
-		var projectile := network_projectiles.get(str(state.get("magic_id", ""))) as SpellProjectile
-		if is_instance_valid(projectile):
-			projectile.receive_network_snapshot(state)
+		var projectile_ref: Variant = network_projectiles.get(str(state.get("magic_id", "")))
+		if is_instance_valid(projectile_ref):
+			(projectile_ref as SpellProjectile).receive_network_snapshot(state)
 
 
 @rpc("authority", "call_remote", "unreliable", 1)

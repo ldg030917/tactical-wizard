@@ -1,6 +1,8 @@
 class_name SpellProjectile
 extends Area3D
 
+signal projectile_resolved(magic_id: String, reason: String)
+
 @export_category("Projectile Defaults")
 @export_range(1.0, 50.0, 0.5, "suffix:m/s") var default_speed: float = 14.0
 @export_range(0.1, 10.0, 0.1, "suffix:s") var maximum_lifetime_seconds: float = 4.0
@@ -47,7 +49,6 @@ func configure(owner_node: Node3D, spell_config: RuntimeSpellConfig, travel_dire
 	caster = owner_node
 	config = spell_config
 	direction = travel_direction.normalized()
-	direction.y = 0.0
 	source_team = team
 	speed = config.projectile_speed if config != null else default_speed
 	collision_layer = 8
@@ -57,7 +58,6 @@ func configure(owner_node: Node3D, spell_config: RuntimeSpellConfig, travel_dire
 	destination = target_position
 	if destination.is_equal_approx(Vector3.ZERO):
 		destination = start_position + direction * config.range_meters
-	destination.y = start_y
 	path_length = maxf(0.1, start_position.distance_to(destination))
 	pierce_remaining = config.pierce_count
 	ricochet_remaining = config.ricochet_count
@@ -142,6 +142,7 @@ func _resolve_impact(at: Vector3, direct_target: Node = null) -> void:
 	set_deferred("monitoring", false)
 	visible = false
 	if network_visual_replica:
+		projectile_resolved.emit(network_magic_id, "visual_complete")
 		queue_free()
 		return
 	var targets: Array[Node] = get_tree().get_nodes_in_group("enemies") if source_team == "player" else get_tree().get_nodes_in_group("player")
@@ -163,6 +164,7 @@ func _resolve_impact(at: Vector3, direct_target: Node = null) -> void:
 		raid.spawn_spell_impact(at, config.base_spell.debug_color, maxf(0.35, config.area_radius), primary_element, vfx_seed)
 	if "delayed_echo" in config.behavior_tags and raid != null and raid.has_method("schedule_spell_echo"):
 		raid.schedule_spell_echo(config, at)
+	projectile_resolved.emit(network_magic_id, "impact")
 	queue_free()
 
 
@@ -175,13 +177,14 @@ func receive_network_snapshot(snapshot: Dictionary) -> void:
 func _apply_spell_to_target(target: Node) -> void:
 	if not target.has_method("take_damage"):
 		return
+	var target_name := target.name
 	if target is PlayerController:
 		var source_label := "magic:%s" % network_magic_id if not network_magic_id.is_empty() else "magic:untracked"
 		(target as PlayerController).take_damage(config.damage_or_healing, global_position, 0.0, config.base_spell.primary_element, source_label)
 	else:
 		target.take_damage(config.damage_or_healing, global_position, 0.0, config.base_spell.primary_element)
 	if not network_magic_id.is_empty():
-		print("[PROJECTILE] hit id=%s target=%s" % [network_magic_id, target.name])
+		print("[PROJECTILE] hit id=%s target=%s projectile_instance=%d" % [network_magic_id, target_name, get_instance_id()])
 	if config.status_effect == "burn" and target.has_method("apply_status"):
 		target.apply_status("burn", maxf(config.effect_duration, config.base_spell.effect_duration_seconds), maxf(config.effect_power, config.base_spell.effect_power))
 	elif config.status_effect in ["slow", "chill"] and target.has_method("apply_status"):
