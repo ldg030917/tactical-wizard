@@ -10,6 +10,10 @@ const REGION_GRAPH := preload("res://scripts/regions/region_graph.gd")
 @onready var world_container: Node = %WorldContainer
 @onready var result_ui: Control = %RaidResultUI
 @onready var pause_menu: Control = %PauseMenu
+@onready var network_panel: Control = %NetworkPanel
+@onready var server_address_input: LineEdit = %ServerAddressInput
+@onready var connect_button: Button = %ConnectButton
+@onready var connection_status_label: Label = %ConnectionStatusLabel
 
 var active_area: Node
 var start_screen: StartScreen
@@ -25,10 +29,43 @@ func _ready() -> void:
 			push_error("CONTENT PARITY CHECK FAILED")
 			get_tree().quit(1)
 		return
+	if NetworkManager.is_server_mode:
+		# A headless export has no renderer, and this also keeps normal --server
+		# launches from displaying any game UI.
+		network_panel.visible = false
+		result_ui.visible = false
+		pause_menu.visible = false
+		print("Main started in dedicated server mode.")
+		return
+
+	connect_button.pressed.connect(_connect_to_server)
+	server_address_input.text_submitted.connect(func(_text: String) -> void: _connect_to_server())
+	NetworkManager.connection_status_changed.connect(_set_connection_status)
+	NetworkManager.client_connected.connect(_on_client_connected)
+	NetworkManager.client_connection_failed.connect(_on_client_connection_failed)
 	(result_ui.get_node("%ReturnButton") as Button).pressed.connect(_return_from_result)
 	(pause_menu.get_node("%ResumeButton") as Button).pressed.connect(toggle_pause)
 	pause_menu.get_node("Panel/Layout/ReturnButton").pressed.connect(_abandon_to_base)
 	show_start()
+
+
+func _connect_to_server() -> void:
+	connect_button.disabled = true
+	var error := NetworkManager.connect_to_server(server_address_input.text)
+	if error != OK:
+		connect_button.disabled = false
+
+
+func _set_connection_status(message: String) -> void:
+	connection_status_label.text = message
+
+
+func _on_client_connected() -> void:
+	network_panel.visible = false
+
+
+func _on_client_connection_failed(_message: String) -> void:
+	connect_button.disabled = false
 
 func show_start() -> void:
 	get_tree().paused = false

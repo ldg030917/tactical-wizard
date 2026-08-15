@@ -24,6 +24,34 @@ script = ExtResource("7")
 [node name="SceneTransition" type="CanvasLayer" parent="."]
 [node name="GlobalUI" type="CanvasLayer" parent="."]
 layer = 20
+[node name="NetworkUI" type="CanvasLayer" parent="."]
+layer = 100
+[node name="NetworkPanel" type="PanelContainer" parent="NetworkUI"]
+unique_name_in_owner = true
+offset_left = 28.0
+offset_top = 28.0
+offset_right = 398.0
+offset_bottom = 184.0
+[node name="Margin" type="MarginContainer" parent="NetworkUI/NetworkPanel"]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+[node name="Layout" type="VBoxContainer" parent="NetworkUI/NetworkPanel/Margin"]
+theme_override_constants/separation = 10
+[node name="Title" type="Label" parent="NetworkUI/NetworkPanel/Margin/Layout"]
+text = "ENet 멀티플레이어 접속 테스트"
+[node name="ServerAddressInput" type="LineEdit" parent="NetworkUI/NetworkPanel/Margin/Layout"]
+unique_name_in_owner = true
+placeholder_text = "서버 IP (예: 127.0.0.1)"
+text = "127.0.0.1"
+[node name="ConnectButton" type="Button" parent="NetworkUI/NetworkPanel/Margin/Layout"]
+unique_name_in_owner = true
+text = "접속"
+[node name="ConnectionStatusLabel" type="Label" parent="NetworkUI/NetworkPanel/Margin/Layout"]
+unique_name_in_owner = true
+text = "IP 주소를 입력한 뒤 접속하세요."
+autowrap_mode = 2
 [node name="RaidResultUI" parent="GlobalUI" instance=ExtResource("4")]
 unique_name_in_owner = true
 [node name="PauseMenu" parent="GlobalUI" instance=ExtResource("5")]
