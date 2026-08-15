@@ -10,6 +10,17 @@ signal injury_changed(body_part: String, severity: float)
 
 @export var in_raid: bool = true
 
+## Set by the authoritative world before the node enters the scene tree.
+var network_enabled := false
+var network_peer_id := 1
+var _network_move_input := Vector2.ZERO
+var _network_sprint := false
+var _network_crouch := false
+var _network_focus := false
+var _network_rotation_y := 0.0
+var _network_send_elapsed := 0.0
+var _snapshot_buffer: Array[Dictionary] = []
+
 @export_category("Movement")
 @export_range(0.1, 20.0, 0.1, "suffix:m/s") var base_move_speed: float = 5.2
 @export_range(1.0, 3.0, 0.05) var sprint_speed_multiplier: float = 1.55
@@ -125,8 +136,32 @@ func _ready() -> void:
 	camera.global_position = global_position + Vector3(0, camera_height, camera_distance)
 	camera.look_at(global_position + Vector3(0, 0.5, 0))
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	if network_enabled:
+		set_multiplayer_authority(network_peer_id)
+		_configure_network_presentation()
+
+
+func configure_network(peer_id: int) -> void:
+	network_enabled = true
+	network_peer_id = peer_id
+
+
+func is_local_network_player() -> bool:
+	return network_enabled and not multiplayer.is_server() and network_peer_id == multiplayer.get_unique_id()
+
+
+func _configure_network_presentation() -> void:
+	if multiplayer.is_server() or not is_local_network_player():
+		camera.current = false
+		placement_preview.visible = false
+		trajectory_preview.visible = false
+	if multiplayer.is_server():
+		visual.visible = false
 
 func _physics_process(delta: float) -> void:
+	if network_enabled:
+		_network_physics_process(delta)
+		return
 	if dead:
 		velocity = velocity.move_toward(Vector3.ZERO, delta * 8.0)
 		move_and_slide()
@@ -140,6 +175,9 @@ func _physics_process(delta: float) -> void:
 	_update_visuals(delta)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if network_enabled:
+		_handle_network_input(event)
+		return
 	if dead:
 		return
 	if event.is_action_pressed("spell_page_1"):
@@ -174,6 +212,125 @@ func _unhandled_input(event: InputEvent) -> void:
 		var root: Node = get_tree().current_scene
 		if root.has_method("toggle_pause"):
 			root.toggle_pause()
+
+
+func _network_physics_process(delta: float) -> void:
+	if multiplayer.is_server():
+		rotation.y = _network_rotation_y
+		if dead:
+			velocity = velocity.move_toward(Vector3.ZERO, delta * 8.0)
+			move_and_slide()
+			return
+		_apply_movement_input(_network_move_input, _network_sprint, _network_crouch, _network_focus, delta)
+		_update_status(delta)
+		return
+	if is_local_network_player():
+		if dead:
+			return
+		_update_aim()
+		_update_movement(delta) # local prediction; server snapshots reconcile it.
+		_update_camera(delta)
+		_update_visuals(delta)
+		_network_send_elapsed += delta
+		if _network_send_elapsed >= 1.0 / 30.0:
+			_network_send_elapsed = 0.0
+			submit_movement_input.rpc_id(1, Input.get_vector("move_left", "move_right", "move_up", "move_down"), rotation.y, Input.is_action_pressed("sprint"), Input.is_action_pressed("crouch"), Input.is_action_pressed("cancel_cast"))
+		return
+	_apply_remote_snapshot(delta)
+	_update_visuals(delta)
+
+
+func _handle_network_input(event: InputEvent) -> void:
+	if dead or not is_local_network_player():
+		return
+	if event.is_action_pressed("spell_page_1"):
+		select_spell_page(0)
+	elif event.is_action_pressed("spell_page_2"):
+		select_spell_page(1)
+	elif event.is_action_pressed("spell_page_3"):
+		select_spell_page(2)
+	elif event.is_action_pressed("dagger_slot"):
+		select_combat_slot(3)
+	elif event.is_action_pressed("cast_spell"):
+		if active_combat_slot == 3:
+			request_dagger_attack.rpc_id(1)
+		else:
+			request_spell_cast.rpc_id(1, selected_page, aim_point)
+	elif event.is_action_pressed("dagger_attack"):
+		request_dagger_attack.rpc_id(1)
+
+
+@rpc("any_peer", "call_remote", "unreliable", 1)
+func submit_movement_input(input: Vector2, rotation_y: float, sprint_pressed: bool, crouch_pressed: bool, focus_pressed: bool) -> void:
+	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != network_peer_id:
+		return
+	_network_move_input = input.limit_length(1.0)
+	_network_rotation_y = rotation_y
+	_network_sprint = sprint_pressed
+	_network_crouch = crouch_pressed
+	_network_focus = focus_pressed
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_dagger_attack() -> void:
+	if multiplayer.is_server() and multiplayer.get_remote_sender_id() == network_peer_id and in_raid:
+		dagger_attack()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_spell_cast(page_index: int, requested_target: Vector3) -> void:
+	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != network_peer_id:
+		return
+	if page_index < 0 or page_index >= page_configs.size():
+		return
+	select_spell_page(page_index)
+	var config := current_spell_config()
+	if config == null or not config.valid:
+		return
+	var offset := requested_target - global_position
+	offset.y = 0.0
+	if offset.length() > config.range_meters:
+		requested_target = global_position + offset.normalized() * config.range_meters
+	cast_selected_spell_immediate(requested_target)
+
+
+func receive_network_snapshot(snapshot: Dictionary) -> void:
+	if multiplayer.is_server():
+		return
+	if is_local_network_player():
+		var authoritative_position: Vector3 = snapshot.get("position", global_position)
+		global_position = global_position.lerp(authoritative_position, 0.35)
+		rotation.y = lerp_angle(rotation.y, float(snapshot.get("rotation_y", rotation.y)), 0.35)
+		health = float(snapshot.get("health", health))
+		mana = float(snapshot.get("mana", mana))
+		return
+	_snapshot_buffer.append({
+		"received_at": Time.get_ticks_msec() / 1000.0,
+		"position": snapshot.get("position", global_position),
+		"rotation_y": snapshot.get("rotation_y", rotation.y),
+		"health": snapshot.get("health", health),
+		"mana": snapshot.get("mana", mana)
+	})
+	while _snapshot_buffer.size() > 12:
+		_snapshot_buffer.pop_front()
+
+
+func _apply_remote_snapshot(_delta: float) -> void:
+	if _snapshot_buffer.is_empty():
+		return
+	var render_time := Time.get_ticks_msec() / 1000.0 - 0.10
+	while _snapshot_buffer.size() > 1 and float(_snapshot_buffer[1].received_at) <= render_time:
+		_snapshot_buffer.pop_front()
+	var first: Dictionary = _snapshot_buffer[0]
+	var second: Dictionary = _snapshot_buffer[1] if _snapshot_buffer.size() > 1 else first
+	var duration := maxf(0.001, float(second.received_at) - float(first.received_at))
+	var alpha := clampf((render_time - float(first.received_at)) / duration, 0.0, 1.0)
+	var first_position: Vector3 = first.position
+	var second_position: Vector3 = second.position
+	global_position = first_position.lerp(second_position, alpha)
+	rotation.y = lerp_angle(float(first.rotation_y), float(second.rotation_y), alpha)
+	health = lerpf(float(first.health), float(second.health), alpha)
+	mana = lerpf(float(first.mana), float(second.mana), alpha)
 
 func _configure_equipment_stats() -> void:
 	armor = 0.0
@@ -250,12 +407,16 @@ func cast_progress_ratio() -> float:
 
 func _update_movement(delta: float) -> void:
 	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	_apply_movement_input(input, Input.is_action_pressed("sprint"), Input.is_action_pressed("crouch"), Input.is_action_pressed("cancel_cast"), delta)
+
+
+func _apply_movement_input(input: Vector2, sprint_pressed: bool, crouch_pressed: bool, focus_pressed: bool, delta: float) -> void:
 	var direction := Vector3(input.x, 0, input.y)
 	if exhaustion_remaining > 0.0:
 		direction = Vector3.ZERO
-	is_focused = Input.is_action_pressed("cancel_cast") and not casting
-	is_crouching = Input.is_action_pressed("crouch")
-	is_sprinting = exhaustion_remaining <= 0.0 and Input.is_action_pressed("sprint") and stamina > 0.5 and input.length() > 0.1 and not casting and not is_focused and not is_crouching
+	is_focused = focus_pressed and not casting
+	is_crouching = crouch_pressed
+	is_sprinting = exhaustion_remaining <= 0.0 and sprint_pressed and stamina > 0.5 and input.length() > 0.1 and not casting and not is_focused and not is_crouching
 	var speed: float = base_move_speed * slow_multiplier
 	var leg_injury: float = maxf(float(injuries.left_leg), float(injuries.right_leg))
 	speed *= 1.0 - leg_injury * 0.35

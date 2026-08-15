@@ -19,8 +19,13 @@ const ELEMENTAL_SPELL_FIELD := preload("res://scenes/spells/elemental_spell_fiel
 var player: PlayerController
 var active_station: BaseStation
 var base_spell_buttons: Array[Button] = []
+var players_by_peer: Dictionary = {}
+var _snapshot_elapsed := 0.0
 
 func _ready() -> void:
+	if NetworkManager.is_network_game():
+		_setup_network_world()
+		return
 	_spawn_player()
 	_build_base_spell_hotbar()
 	GameState.state_changed.connect(_sync_station_levels)
@@ -28,6 +33,9 @@ func _ready() -> void:
 	base_ui.close_station()
 
 func _process(_delta: float) -> void:
+	if NetworkManager.is_network_game():
+		_process_network_world(_delta)
+		return
 	if player == null:
 		return
 	base_mana_gauge.max_value = player.max_mana
@@ -82,6 +90,116 @@ func _spawn_player() -> void:
 	player.position = runtime_actors.to_local(player_spawn.global_position)
 	player.rotation_degrees.y = player_spawn.facing_direction_degrees
 	runtime_actors.add_child(player)
+
+
+func _setup_network_world() -> void:
+	# The dedicated server is the sole source of player instances and snapshots.
+	if multiplayer.is_server():
+		multiplayer.peer_connected.connect(_on_network_peer_connected)
+		multiplayer.peer_disconnected.connect(_on_network_peer_disconnected)
+		_create_network_player(1, player_spawn.global_position, deg_to_rad(player_spawn.facing_direction_degrees))
+	else:
+		request_initial_players.rpc_id(1)
+
+
+func _process_network_world(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
+	_snapshot_elapsed += delta
+	if _snapshot_elapsed < 1.0 / 20.0:
+		return
+	_snapshot_elapsed = 0.0
+	var states: Array[Dictionary] = []
+	for peer_id: int in players_by_peer:
+		var network_player := players_by_peer[peer_id] as PlayerController
+		if not is_instance_valid(network_player):
+			continue
+		states.append({
+			"peer_id": peer_id,
+			"position": network_player.global_position,
+			"rotation_y": network_player.rotation.y,
+			"health": network_player.health,
+			"mana": network_player.mana
+		})
+	receive_player_snapshots.rpc(states)
+
+
+func _on_network_peer_connected(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var position := player_spawn.global_position + Vector3(float(players_by_peer.size() % 3) * 1.25, 0.0, float(players_by_peer.size() / 3) * 1.25)
+	_create_network_player(peer_id, position, deg_to_rad(player_spawn.facing_direction_degrees))
+	spawn_network_player.rpc(peer_id, position, deg_to_rad(player_spawn.facing_direction_degrees))
+
+
+func _on_network_peer_disconnected(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_remove_network_player(peer_id)
+	remove_network_player.rpc(peer_id)
+
+
+func _create_network_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> PlayerController:
+	if players_by_peer.has(peer_id):
+		return players_by_peer[peer_id] as PlayerController
+	var network_player := player_scene.instantiate() as PlayerController
+	network_player.name = "Player_%d" % peer_id
+	network_player.in_raid = false
+	network_player.configure_network(peer_id)
+	runtime_actors.add_child(network_player)
+	network_player.global_position = spawn_position
+	network_player.rotation.y = spawn_rotation_y
+	players_by_peer[peer_id] = network_player
+	if not multiplayer.is_server() and peer_id == multiplayer.get_unique_id():
+		player = network_player
+		_build_base_spell_hotbar()
+		base_ui.close_station()
+	return network_player
+
+
+func _remove_network_player(peer_id: int) -> void:
+	var network_player := players_by_peer.get(peer_id) as PlayerController
+	players_by_peer.erase(peer_id)
+	if is_instance_valid(network_player):
+		network_player.queue_free()
+	if player == network_player:
+		player = null
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_initial_players() -> void:
+	if not multiplayer.is_server():
+		return
+	var requesting_peer := multiplayer.get_remote_sender_id()
+	if requesting_peer <= 0:
+		return
+	for peer_id: int in players_by_peer:
+		var network_player := players_by_peer[peer_id] as PlayerController
+		if is_instance_valid(network_player):
+			spawn_network_player.rpc_id(requesting_peer, peer_id, network_player.global_position, network_player.rotation.y)
+
+
+@rpc("authority", "call_remote", "reliable")
+func spawn_network_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> void:
+	if not multiplayer.is_server():
+		_create_network_player(peer_id, spawn_position, spawn_rotation_y)
+
+
+@rpc("authority", "call_remote", "reliable")
+func remove_network_player(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		_remove_network_player(peer_id)
+
+
+@rpc("authority", "call_remote", "unreliable", 1)
+func receive_player_snapshots(states: Array[Dictionary]) -> void:
+	if multiplayer.is_server():
+		return
+	for state: Dictionary in states:
+		var peer_id := int(state.get("peer_id", 0))
+		var network_player := players_by_peer.get(peer_id) as PlayerController
+		if is_instance_valid(network_player):
+			network_player.receive_network_snapshot(state)
 
 func open_tab(tab: String) -> void:
 	if tab == "deploy":

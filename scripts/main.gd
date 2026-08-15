@@ -14,6 +14,7 @@ const REGION_GRAPH := preload("res://scripts/regions/region_graph.gd")
 @onready var server_address_input: LineEdit = %ServerAddressInput
 @onready var connect_button: Button = %ConnectButton
 @onready var connection_status_label: Label = %ConnectionStatusLabel
+@onready var network_status_label: Label = %NetworkStatusLabel
 
 var active_area: Node
 var start_screen: StartScreen
@@ -35,7 +36,9 @@ func _ready() -> void:
 		network_panel.visible = false
 		result_ui.visible = false
 		pause_menu.visible = false
+		network_status_label.visible = false
 		print("Main started in dedicated server mode.")
+		call_deferred("show_base")
 		return
 
 	connect_button.pressed.connect(_connect_to_server)
@@ -43,6 +46,8 @@ func _ready() -> void:
 	NetworkManager.connection_status_changed.connect(_set_connection_status)
 	NetworkManager.client_connected.connect(_on_client_connected)
 	NetworkManager.client_connection_failed.connect(_on_client_connection_failed)
+	NetworkManager.session_state_changed.connect(_on_session_state_changed)
+	NetworkManager.ping_updated.connect(_on_ping_updated)
 	(result_ui.get_node("%ReturnButton") as Button).pressed.connect(_return_from_result)
 	(pause_menu.get_node("%ResumeButton") as Button).pressed.connect(toggle_pause)
 	pause_menu.get_node("Panel/Layout/ReturnButton").pressed.connect(_abandon_to_base)
@@ -62,10 +67,25 @@ func _set_connection_status(message: String) -> void:
 
 func _on_client_connected() -> void:
 	network_panel.visible = false
+	start_game()
 
 
 func _on_client_connection_failed(_message: String) -> void:
 	connect_button.disabled = false
+
+
+func _on_session_state_changed(state: String) -> void:
+	match state:
+		"ONLINE":
+			network_status_label.text = "ONLINE\nPing: measuring...\nPeer: %d" % multiplayer.get_unique_id()
+		"CONNECTING":
+			network_status_label.text = "CONNECTING..."
+		_:
+			network_status_label.text = "OFFLINE"
+
+
+func _on_ping_updated(milliseconds: int) -> void:
+	network_status_label.text = "ONLINE\nPing: %d ms\nPeer: %d" % [milliseconds, multiplayer.get_unique_id()]
 
 func show_start() -> void:
 	get_tree().paused = false

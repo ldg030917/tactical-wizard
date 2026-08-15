@@ -52,6 +52,14 @@ text = "접속"
 unique_name_in_owner = true
 text = "IP 주소를 입력한 뒤 접속하세요."
 autowrap_mode = 2
+[node name="NetworkStatusLabel" type="Label" parent="NetworkUI"]
+unique_name_in_owner = true
+offset_left = 1090.0
+offset_top = 24.0
+offset_right = 1250.0
+offset_bottom = 90.0
+text = "OFFLINE"
+horizontal_alignment = 2
 [node name="RaidResultUI" parent="GlobalUI" instance=ExtResource("4")]
 unique_name_in_owner = true
 [node name="PauseMenu" parent="GlobalUI" instance=ExtResource("5")]
