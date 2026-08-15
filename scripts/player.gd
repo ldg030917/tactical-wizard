@@ -44,7 +44,6 @@ var _snapshot_buffer: Array[Dictionary] = []
 @export_range(0.0, 1.0, 0.05) var aim_look_ahead: float = 0.28
 @export_range(0.1, 3.0, 0.05) var free_aim_cursor_sensitivity: float = 1.0
 @export_range(0.05, 0.8, 0.01) var free_aim_dead_zone_ratio: float = 0.28
-@export_range(0.1, 1.5, 0.05) var free_aim_body_turn_speed: float = 2.4
 @export_range(0.1, 1.5, 0.05) var free_aim_pitch_turn_speed: float = 1.65
 @export_range(10.0, 300.0, 1.0) var free_aim_ray_distance: float = 90.0
 @export_range(10.0, 400.0, 1.0) var free_aim_cursor_recenter_pixels_per_radian: float = 115.0
@@ -526,9 +525,9 @@ func _update_movement(delta: float) -> void:
 
 
 func _apply_movement_input(input: Vector2, sprint_pressed: bool, crouch_pressed: bool, focus_pressed: bool, delta: float) -> void:
-	# Movement input is raw local WASD axes. Both local prediction and the
-	# dedicated server rotate it by the same authoritative body yaw.
-	var direction := Vector3(input.x, 0, input.y).rotated(Vector3.UP, rotation.y)
+	# Duckov-style movement is world-space. Facing is replicated separately and
+	# must never rotate W/A/S/D on either the client or the dedicated server.
+	var direction := Vector3(input.x, 0, input.y)
 	if exhaustion_remaining > 0.0:
 		direction = Vector3.ZERO
 	is_focused = focus_pressed and not casting
@@ -602,7 +601,18 @@ func _update_network_camera_aim_target() -> void:
 	_network_aim_origin = camera.project_ray_origin(_virtual_aim_position)
 	_network_aim_direction = camera.project_ray_normal(_virtual_aim_position).normalized()
 	aim_point = _raycast_aim_target(_network_aim_origin, _network_aim_direction, free_aim_ray_distance)
+	_apply_network_aim_facing()
 	_update_preview()
+
+
+func _apply_network_aim_facing() -> void:
+	var horizontal_aim := aim_point - global_position
+	horizontal_aim.y = 0.0
+	if horizontal_aim.length_squared() <= 0.05:
+		return
+	# Reuses the Solo aim convention: CharacterBody3D forward is -Z.
+	_network_aim_yaw = atan2(-horizontal_aim.x, -horizontal_aim.z)
+	rotation.y = _network_aim_yaw
 
 
 func _initialize_virtual_aim_cursor() -> void:
@@ -633,14 +643,11 @@ func _update_free_aim_turn(delta: float) -> void:
 	var in_turn_zone := not is_zero_approx(turn.x) or not is_zero_approx(turn.y)
 	if in_turn_zone != _free_aim_in_turn_zone:
 		_free_aim_in_turn_zone = in_turn_zone
-		print("[AIM] peer=%d %s turn_zone cursor=%s turn=%s body_yaw=%.3f" % [network_peer_id, "entered" if in_turn_zone else "exited", str(_virtual_aim_position), str(turn), _network_aim_yaw])
-	var yaw_delta := -turn.x * free_aim_body_turn_speed * delta
+		print("[AIM] peer=%d %s turn_zone cursor=%s turn=%s" % [network_peer_id, "entered" if in_turn_zone else "exited", str(_virtual_aim_position), str(turn)])
 	var pitch_delta := -turn.y * free_aim_pitch_turn_speed * delta
-	_network_aim_yaw += yaw_delta
 	_network_aim_pitch = clampf(_network_aim_pitch + pitch_delta, -0.65, 0.65)
-	# Camera/body turning consumes only the part of the cursor outside the dead
-	# zone. It drifts toward centre smoothly and is never warped there.
-	_virtual_aim_position.x -= turn.x * absf(yaw_delta) * free_aim_cursor_recenter_pixels_per_radian
+	# Turn zones steer the camera pitch and its follow framing. Body facing is
+	# intentionally resolved from the world aim point below, even in the dead zone.
 	_virtual_aim_position.y -= turn.y * absf(pitch_delta) * free_aim_cursor_recenter_pixels_per_radian
 	_virtual_aim_position = _virtual_aim_position.clamp(Vector2.ZERO, viewport_size)
 
