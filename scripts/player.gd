@@ -248,6 +248,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _network_physics_process(delta: float) -> void:
 	if multiplayer.is_server():
 		rotation.y = _network_rotation_y
+		# The headless server owns combat timing even though it skips visual casts.
+		_tick_combat_cooldowns(delta)
 		if dead:
 			velocity = velocity.move_toward(Vector3.ZERO, delta * 8.0)
 			move_and_slide()
@@ -262,6 +264,8 @@ func _network_physics_process(delta: float) -> void:
 		if root.has_method("is_local_ui_open") and root.is_local_ui_open():
 			velocity = Vector3.ZERO
 			return
+		# Smooth the local cooldown UI between authoritative snapshots.
+		_tick_combat_cooldowns(delta)
 		_update_aim()
 		_update_movement(delta) # local prediction; server snapshots reconcile it.
 		_update_camera(delta)
@@ -294,6 +298,9 @@ func _handle_network_input(event: InputEvent) -> void:
 		if active_combat_slot == 3:
 			request_dagger_attack.rpc_id(1)
 		else:
+			var config := current_spell_config()
+			print("[CAST_INPUT] peer=%d page=%d spell=%s" % [network_peer_id, selected_page, config.base_spell.spell_id if config != null else "invalid"])
+			print("[CAST_REQUEST] peer=%d page=%d target=%s" % [network_peer_id, selected_page, str(aim_point)])
 			_log_network_cast_aim()
 			request_spell_cast.rpc_id(1, selected_page, aim_point)
 	elif event.is_action_pressed("dagger_attack"):
@@ -330,17 +337,27 @@ func request_spell_cast(page_index: int, requested_target: Vector3) -> void:
 	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != network_peer_id:
 		return
 	if page_index < 0 or page_index >= page_configs.size():
+		print("[CAST_REJECT] peer=%d reason=invalid_page page=%d" % [network_peer_id, page_index])
 		return
 	select_spell_page(page_index)
 	var config := current_spell_config()
 	if config == null or not config.valid:
+		print("[CAST_REJECT] peer=%d reason=invalid_spell page=%d" % [network_peer_id, page_index])
+		return
+	var rejection_reason := _cast_rejection_reason(config)
+	print("[CAST_REQUEST] peer=%d spell=%s cooldown=%.3f casting=%s mana=%.2f" % [network_peer_id, config.base_spell.spell_id, cooldown_remaining(), str(casting), mana])
+	if not rejection_reason.is_empty():
+		print("[CAST_REJECT] peer=%d spell=%s reason=%s" % [network_peer_id, config.base_spell.spell_id, rejection_reason])
 		return
 	var offset := requested_target - cast_origin.global_position
 	if offset.length() > config.range_meters:
 		requested_target = cast_origin.global_position + offset.normalized() * config.range_meters
 	var projectile_direction := (requested_target - cast_origin.global_position).normalized()
 	print("[AIM] server cast peer=%d muzzle=%s target=%s projectile_dir=%s" % [network_peer_id, str(cast_origin.global_position), str(requested_target), str(projectile_direction)])
-	cast_selected_spell_immediate(requested_target)
+	if cast_selected_spell_immediate(requested_target):
+		print("[CAST_ACCEPT] peer=%d spell=%s cooldown=%.3f mana=%.2f" % [network_peer_id, config.base_spell.spell_id, cooldown_remaining(), mana])
+	else:
+		print("[CAST_REJECT] peer=%d spell=%s reason=state_changed_during_cast" % [network_peer_id, config.base_spell.spell_id])
 
 
 func _log_network_cast_aim() -> void:
@@ -348,7 +365,7 @@ func _log_network_cast_aim() -> void:
 		return
 	var camera_forward := -camera.global_transform.basis.z
 	var projectile_direction := (aim_point - cast_origin.global_position).normalized()
-	print("[AIM] cast peer=%d camera_origin=%s camera_forward=%s muzzle=%s target=%s projectile_dir=%s" % [network_peer_id, str(camera.global_position), str(camera_forward), str(cast_origin.global_position), str(aim_point), str(projectile_direction)])
+	print("[AIM] cast peer=%d body_yaw=%.3f camera_yaw=%.3f camera_pitch=%.3f camera_origin=%s camera_forward=%s aim_target=%s projectile_dir=%s" % [network_peer_id, rotation.y, camera.global_rotation.y, _network_aim_pitch, str(camera.global_position), str(camera_forward), str(aim_point), str(projectile_direction)])
 
 
 func receive_network_snapshot(snapshot: Dictionary) -> void:
@@ -365,6 +382,7 @@ func receive_network_snapshot(snapshot: Dictionary) -> void:
 		health = float(snapshot.get("health", health))
 		mana = float(snapshot.get("mana", mana))
 		dead = bool(snapshot.get("dead", dead))
+		_apply_network_cooldowns(snapshot)
 		return
 	_snapshot_buffer.append({
 		"received_at": Time.get_ticks_msec() / 1000.0,
@@ -555,29 +573,18 @@ func _update_network_camera_aim_target() -> void:
 		if ground_distance > 0.0:
 			target_point = ray_origin + ray_direction * ground_distance
 	aim_point = target_point
-	var flat_target := aim_point - global_position
-	flat_target.y = 0.0
-	if flat_target.length_squared() > 0.001:
-		_network_aim_yaw = atan2(-flat_target.x, -flat_target.z)
-		rotation.y = _network_aim_yaw
+	# The camera follows the body with smoothing. Feeding this delayed ray back
+	# into body yaw overwrote mouse yaw every frame, so horizontal aim could not
+	# catch up. The ray supplies only the cast target; mouse input owns body yaw.
+	_update_preview()
 
 func begin_cast() -> bool:
 	var config := current_spell_config()
-	if active_combat_slot == 3 or casting or config == null or not config.valid or cooldown_remaining() > 0.0:
+	var rejection_reason := _cast_rejection_reason(config)
+	if not rejection_reason.is_empty():
+		_match_cast_rejection_message(rejection_reason)
 		return false
 	var is_explosion: bool = config.base_spell.spell_id == "explosion"
-	if is_explosion and not in_raid:
-		_show_message("Explosion can only be invoked during an expedition.")
-		return false
-	if is_explosion and not GameState.can_use_explosion():
-		_show_message("Explosion has already been used during this expedition.")
-		return false
-	if is_explosion and mana + 0.001 < max_mana:
-		_show_message("Explosion requires a completely full mana reserve.")
-		return false
-	if not is_explosion and mana + 0.001 < config.mana_cost:
-		_show_message("Insufficient mana — use an Azure Tonic or wait for regeneration.")
-		return false
 	casting = true
 	cast_elapsed = 0.0
 	var arm_injury: float = maxf(float(injuries.left_arm), float(injuries.right_arm))
@@ -597,9 +604,7 @@ func cancel_cast() -> void:
 	cast_glow.scale = Vector3.ONE
 
 func _update_casting(delta: float) -> void:
-	for index: int in range(page_cooldowns.size()):
-		page_cooldowns[index] = maxf(0.0, page_cooldowns[index] - delta)
-	dagger_cooldown = maxf(0.0, dagger_cooldown - delta)
+	_tick_combat_cooldowns(delta)
 	if not casting:
 		return
 	cast_elapsed += delta
@@ -611,6 +616,53 @@ func _update_casting(delta: float) -> void:
 	cast_glow.rotation.z -= delta * 4.0
 	if cast_elapsed >= cast_duration:
 		complete_cast()
+
+
+func _tick_combat_cooldowns(delta: float) -> void:
+	for index: int in range(page_cooldowns.size()):
+		page_cooldowns[index] = maxf(0.0, page_cooldowns[index] - delta)
+	dagger_cooldown = maxf(0.0, dagger_cooldown - delta)
+
+
+func _cast_rejection_reason(config: RuntimeSpellConfig) -> String:
+	if active_combat_slot == 3:
+		return "dagger_slot"
+	if casting:
+		return "is_casting"
+	if config == null or not config.valid:
+		return "invalid_spell"
+	if cooldown_remaining() > 0.001:
+		return "cooldown"
+	var is_explosion := config.base_spell.spell_id == "explosion"
+	if is_explosion and not in_raid:
+		return "explosion_outside_raid"
+	if is_explosion and not GameState.can_use_explosion():
+		return "explosion_already_used"
+	if is_explosion and mana + 0.001 < max_mana:
+		return "explosion_requires_full_mana"
+	if not is_explosion and mana + 0.001 < config.mana_cost:
+		return "insufficient_mana"
+	return ""
+
+
+func _match_cast_rejection_message(reason: String) -> void:
+	match reason:
+		"explosion_outside_raid":
+			_show_message("Explosion can only be invoked during an expedition.")
+		"explosion_already_used":
+			_show_message("Explosion has already been used during this expedition.")
+		"explosion_requires_full_mana":
+			_show_message("Explosion requires a completely full mana reserve.")
+		"insufficient_mana":
+			_show_message("Insufficient mana — use an Azure Tonic or wait for regeneration.")
+
+
+func _apply_network_cooldowns(snapshot: Dictionary) -> void:
+	var snapshot_cooldowns: Variant = snapshot.get("cooldowns", null)
+	if not snapshot_cooldowns is Array:
+		return
+	for index: int in range(mini(page_cooldowns.size(), snapshot_cooldowns.size())):
+		page_cooldowns[index] = maxf(0.0, float(snapshot_cooldowns[index]))
 
 func complete_cast() -> bool:
 	var config := current_spell_config()

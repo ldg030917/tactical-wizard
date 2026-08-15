@@ -154,7 +154,7 @@ func _process_network_raid(delta: float) -> void:
 	for peer_id: int in network_players:
 		var network_player := network_players[peer_id] as PlayerController
 		if is_instance_valid(network_player):
-			states.append({"peer_id": peer_id, "position": network_player.global_position, "rotation_y": network_player.rotation.y, "health": network_player.health, "mana": network_player.mana, "dead": network_player.dead})
+			states.append({"peer_id": peer_id, "position": network_player.global_position, "rotation_y": network_player.rotation.y, "health": network_player.health, "mana": network_player.mana, "cooldowns": network_player.page_cooldowns.duplicate(), "dead": network_player.dead})
 	receive_network_raid_snapshots.rpc(states)
 	var enemy_states: Array[Dictionary] = []
 	for enemy_id: String in network_enemies:
