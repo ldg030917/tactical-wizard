@@ -148,6 +148,7 @@ func _start_raid_scene() -> void:
 
 func _on_server_raid_start_requested() -> void:
 	if active_area != null:
+		print("[RAID] Ignored start request: server already has an active area")
 		return
 	_start_raid_scene()
 	print("[RAID] Server loading raid scene")
@@ -162,6 +163,7 @@ func _on_client_load_raid_requested() -> void:
 
 func _on_all_raid_clients_loaded() -> void:
 	if active_area is RaidScene:
+		print("[RAID] Server starting player spawn")
 		(active_area as RaidScene).begin_network_raid(NetworkManager.connected_peer_ids.keys())
 
 func travel_to_region(region_id: String) -> bool:

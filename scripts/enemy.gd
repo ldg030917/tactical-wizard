@@ -96,7 +96,20 @@ func _configure_variant() -> void:
 	max_health = health
 
 func _find_player() -> void:
-	player = get_tree().get_first_node_in_group("player") as PlayerController
+	var closest_player: PlayerController
+	var closest_distance := INF
+	var own_raid := _raid_scene()
+	for candidate: Node in get_tree().get_nodes_in_group("player"):
+		if not candidate is PlayerController:
+			continue
+		var candidate_player := candidate as PlayerController
+		if candidate_player.dead or candidate_player._gameplay_area() != own_raid:
+			continue
+		var distance := global_position.distance_squared_to(candidate_player.global_position)
+		if distance < closest_distance:
+			closest_distance = distance
+			closest_player = candidate_player
+	player = closest_player
 
 func _physics_process(delta: float) -> void:
 	if dead:
@@ -222,7 +235,7 @@ func _attack(distance: float) -> void:
 		return
 	if enemy_type in ["monster", "creature"]:
 		if distance <= attack_range + 0.35:
-			player.take_damage(damage, global_position, 0.24, primary_element)
+			player.take_damage(damage, global_position, 0.24, primary_element, "enemy:%s" % enemy_type)
 		attack_cooldown = attack_interval
 		return
 	var raid: Node = _raid_scene()

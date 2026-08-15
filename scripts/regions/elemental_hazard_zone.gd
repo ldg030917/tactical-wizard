@@ -21,7 +21,7 @@ func _physics_process(delta: float) -> void:
 		if not is_instance_valid(player) or player.dead:
 			continue
 		if hazard_element == "fire":
-			player.take_damage(power_per_second * delta, global_position, 0.0, "fire")
+			player.take_damage(power_per_second * delta, global_position, 0.0, "fire", "hazard:%s" % hazard_element)
 			player.apply_status("burn", 0.4, power_per_second * 0.35)
 		else:
 			player.apply_status("slow", 0.35, 1.0 - water_slow_multiplier)

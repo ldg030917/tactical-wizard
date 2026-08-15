@@ -108,7 +108,7 @@ func begin_network_raid(peer_ids: Array) -> void:
 		var spawn_position := player_spawn.global_position + Vector3(float(offset_index % 3) * 1.25, 0.0, float(offset_index / 3) * 1.25)
 		_create_network_raid_player(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
 		spawn_network_raid_player.rpc(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
-	print("[RAID] Spawned %d network players" % network_players.size())
+	print("[RAID] Spawned %d network players for peers=%s" % [network_players.size(), str(network_players.keys())])
 
 
 func _process(delta: float) -> void:
@@ -132,12 +132,13 @@ func _process_network_raid(delta: float) -> void:
 	for peer_id: int in network_players:
 		var network_player := network_players[peer_id] as PlayerController
 		if is_instance_valid(network_player):
-			states.append({"peer_id": peer_id, "position": network_player.global_position, "rotation_y": network_player.rotation.y, "health": network_player.health, "mana": network_player.mana})
+			states.append({"peer_id": peer_id, "position": network_player.global_position, "rotation_y": network_player.rotation.y, "health": network_player.health, "mana": network_player.mana, "dead": network_player.dead})
 	receive_network_raid_snapshots.rpc(states)
 
 
 func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> PlayerController:
 	if network_players.has(peer_id):
+		print("[PLAYER] Duplicate spawn ignored peer=%d" % peer_id)
 		return network_players[peer_id] as PlayerController
 	var network_player := player_scene.instantiate() as PlayerController
 	network_player.name = "Player_%d" % peer_id
@@ -147,6 +148,7 @@ func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_ro
 	network_player.global_position = spawn_position
 	network_player.rotation.y = spawn_rotation_y
 	network_players[peer_id] = network_player
+	print("[PLAYER] Spawn peer=%d local=%s position=%s" % [peer_id, str(not multiplayer.is_server() and peer_id == multiplayer.get_unique_id()), str(spawn_position)])
 	if not multiplayer.is_server() and peer_id == multiplayer.get_unique_id():
 		player = network_player
 		hud.visible = true

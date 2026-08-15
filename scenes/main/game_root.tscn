@@ -1,58 +1,91 @@
-[gd_scene load_steps=8 format=3]
-[ext_resource path="res://scripts/main.gd" type="Script" id="1"]
-[ext_resource path="res://scenes/base/base.tscn" type="PackedScene" id="2"]
-[ext_resource path="res://scenes/raid/raid_map.tscn" type="PackedScene" id="3"]
-[ext_resource path="res://scenes/ui/raid_result_ui.tscn" type="PackedScene" id="4"]
-[ext_resource path="res://scenes/ui/pause_menu.tscn" type="PackedScene" id="5"]
-[ext_resource path="res://scenes/start/start_screen.tscn" type="PackedScene" id="6"]
-[ext_resource path="res://scripts/multiplayer/authority_bridge.gd" type="Script" id="7"]
-[node name="GameRoot" type="Node"]
+[gd_scene format=3 uid="uid://jdtfes4a1g8x"]
+
+[ext_resource type="Script" uid="uid://ccse47atvw34y" path="res://scripts/main.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://w8ksirvjh6wh" path="res://scenes/base/base.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/raid/raid_map.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/ui/raid_result_ui.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/ui/pause_menu.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://scenes/start/start_screen.tscn" id="6"]
+[ext_resource type="Script" uid="uid://dgugt0d2r7vn4" path="res://scripts/multiplayer/authority_bridge.gd" id="7"]
+
+[node name="GameRoot" type="Node" unique_id=1101959400]
 script = ExtResource("1")
 base_scene = ExtResource("2")
 raid_scene = ExtResource("3")
 start_screen_scene = ExtResource("6")
-[node name="WorldContainer" type="Node" parent="."]
+
+[node name="WorldContainer" type="Node" parent="." unique_id=1216955061]
 unique_name_in_owner = true
-[node name="PersistentSystems" type="Node" parent="."]
-[node name="SaveManager_AutoloadBridge" type="Node" parent="PersistentSystems"]
-[node name="ItemDatabase_ResourceRegistry" type="Node" parent="PersistentSystems"]
-[node name="QuestManager_GameStateBridge" type="Node" parent="PersistentSystems"]
-[node name="ProgressionManager_GameStateBridge" type="Node" parent="PersistentSystems"]
-[node name="AudioManager" type="Node" parent="PersistentSystems"]
-[node name="AuthorityBridge" type="Node" parent="PersistentSystems"]
+
+[node name="PersistentSystems" type="Node" parent="." unique_id=996583845]
+
+[node name="SaveManager_AutoloadBridge" type="Node" parent="PersistentSystems" unique_id=418478923]
+
+[node name="ItemDatabase_ResourceRegistry" type="Node" parent="PersistentSystems" unique_id=1490103902]
+
+[node name="QuestManager_GameStateBridge" type="Node" parent="PersistentSystems" unique_id=210116287]
+
+[node name="ProgressionManager_GameStateBridge" type="Node" parent="PersistentSystems" unique_id=913757656]
+
+[node name="AudioManager" type="Node" parent="PersistentSystems" unique_id=116427650]
+
+[node name="AuthorityBridge" type="Node" parent="PersistentSystems" unique_id=772618358]
 script = ExtResource("7")
-[node name="SceneTransition" type="CanvasLayer" parent="."]
-[node name="GlobalUI" type="CanvasLayer" parent="."]
+
+[node name="SceneTransition" type="CanvasLayer" parent="." unique_id=1393828931]
+
+[node name="GlobalUI" type="CanvasLayer" parent="." unique_id=1415646070]
 layer = 20
-[node name="NetworkUI" type="CanvasLayer" parent="."]
+
+[node name="RaidResultUI" parent="GlobalUI" unique_id=41261303 instance=ExtResource("4")]
+unique_name_in_owner = true
+
+[node name="PauseMenu" parent="GlobalUI" unique_id=114819127 instance=ExtResource("5")]
+unique_name_in_owner = true
+
+[node name="NetworkUI" type="CanvasLayer" parent="." unique_id=1503480338]
 layer = 100
-[node name="NetworkPanel" type="PanelContainer" parent="NetworkUI"]
+
+[node name="NetworkPanel" type="PanelContainer" parent="NetworkUI" unique_id=14389509]
 unique_name_in_owner = true
 offset_left = 28.0
 offset_top = 28.0
 offset_right = 398.0
 offset_bottom = 184.0
-[node name="Margin" type="MarginContainer" parent="NetworkUI/NetworkPanel"]
+
+[node name="Margin" type="MarginContainer" parent="NetworkUI/NetworkPanel" unique_id=2008722210]
+layout_mode = 2
 theme_override_constants/margin_left = 16
 theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 16
-[node name="Layout" type="VBoxContainer" parent="NetworkUI/NetworkPanel/Margin"]
+
+[node name="Layout" type="VBoxContainer" parent="NetworkUI/NetworkPanel/Margin" unique_id=1960196995]
+layout_mode = 2
 theme_override_constants/separation = 10
-[node name="Title" type="Label" parent="NetworkUI/NetworkPanel/Margin/Layout"]
+
+[node name="Title" type="Label" parent="NetworkUI/NetworkPanel/Margin/Layout" unique_id=329981952]
+layout_mode = 2
 text = "ENet 멀티플레이어 접속 테스트"
-[node name="ServerAddressInput" type="LineEdit" parent="NetworkUI/NetworkPanel/Margin/Layout"]
+
+[node name="ServerAddressInput" type="LineEdit" parent="NetworkUI/NetworkPanel/Margin/Layout" unique_id=24929066]
 unique_name_in_owner = true
-placeholder_text = "서버 IP (예: 127.0.0.1)"
+layout_mode = 2
 text = "127.0.0.1"
-[node name="ConnectButton" type="Button" parent="NetworkUI/NetworkPanel/Margin/Layout"]
+placeholder_text = "서버 IP (예: 127.0.0.1)"
+
+[node name="ConnectButton" type="Button" parent="NetworkUI/NetworkPanel/Margin/Layout" unique_id=1800520421]
 unique_name_in_owner = true
+layout_mode = 2
 text = "접속"
-[node name="ConnectionStatusLabel" type="Label" parent="NetworkUI/NetworkPanel/Margin/Layout"]
+
+[node name="ConnectionStatusLabel" type="Label" parent="NetworkUI/NetworkPanel/Margin/Layout" unique_id=786281435]
 unique_name_in_owner = true
+layout_mode = 2
 text = "IP 주소를 입력한 뒤 접속하세요."
 autowrap_mode = 2
-[node name="NetworkStatusLabel" type="Label" parent="NetworkUI"]
+
+[node name="NetworkStatusLabel" type="Label" parent="NetworkUI" unique_id=1772192235]
 unique_name_in_owner = true
 offset_left = 1090.0
 offset_top = 24.0
@@ -60,7 +93,3 @@ offset_right = 1250.0
 offset_bottom = 90.0
 text = "OFFLINE"
 horizontal_alignment = 2
-[node name="RaidResultUI" parent="GlobalUI" instance=ExtResource("4")]
-unique_name_in_owner = true
-[node name="PauseMenu" parent="GlobalUI" instance=ExtResource("5")]
-unique_name_in_owner = true

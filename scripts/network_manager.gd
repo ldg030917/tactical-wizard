@@ -107,6 +107,7 @@ func is_network_game() -> bool:
 
 func request_raid_start() -> void:
 	if is_connected_to_server():
+		print("[RAID] Start requested by peer=%d" % multiplayer.get_unique_id())
 		_request_raid_start.rpc_id(1)
 
 
@@ -114,13 +115,17 @@ func server_raid_scene_ready() -> void:
 	if not multiplayer.is_server():
 		return
 	_raid_loading_peers = connected_peer_ids.duplicate()
-	_load_raid_on_clients.rpc()
+	print("[RAID] members=%s" % str(_raid_loading_peers.keys()))
+	for peer_id: int in _raid_loading_peers:
+		print("[RAID] sending load request peer=%d" % peer_id)
+		_load_raid_on_clients.rpc_id(peer_id)
 	if _raid_loading_peers.is_empty():
 		all_raid_clients_loaded.emit()
 
 
 func client_raid_scene_ready() -> void:
 	if is_connected_to_server():
+		print("[RAID] Client loaded scene peer=%d" % multiplayer.get_unique_id())
 		_client_raid_loaded.rpc_id(1)
 
 
@@ -186,13 +191,18 @@ func _on_server_disconnected() -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_raid_start() -> void:
-	if multiplayer.is_server() and multiplayer.get_remote_sender_id() in connected_peer_ids:
+	if not multiplayer.is_server():
+		return
+	var requester := multiplayer.get_remote_sender_id()
+	if requester in connected_peer_ids:
+		print("[RAID] start requested by peer=%d" % requester)
 		raid_start_requested.emit()
 
 
 @rpc("authority", "call_remote", "reliable")
 func _load_raid_on_clients() -> void:
 	if is_connected_to_server():
+		print("[RAID] load request received peer=%d" % multiplayer.get_unique_id())
 		load_raid_requested.emit()
 
 
@@ -200,8 +210,14 @@ func _load_raid_on_clients() -> void:
 func _client_raid_loaded() -> void:
 	if not multiplayer.is_server():
 		return
-	_raid_loading_peers.erase(multiplayer.get_remote_sender_id())
+	var loaded_peer := multiplayer.get_remote_sender_id()
+	if not _raid_loading_peers.has(loaded_peer):
+		print("[RAID] ignored unexpected ready peer=%d" % loaded_peer)
+		return
+	_raid_loading_peers.erase(loaded_peer)
+	print("[RAID] peer=%d loaded; ready=%d/%d" % [loaded_peer, connected_peer_ids.size() - _raid_loading_peers.size(), connected_peer_ids.size()])
 	if _raid_loading_peers.is_empty():
+		print("[RAID] all members loaded; spawning players")
 		all_raid_clients_loaded.emit()
 
 

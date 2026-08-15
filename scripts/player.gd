@@ -96,6 +96,7 @@ var walk_time: float = 0.0
 var recoil_amount: float = 0.0
 var injuries: Dictionary = {"head":0.0, "torso":0.0, "left_arm":0.0, "right_arm":0.0, "left_leg":0.0, "right_leg":0.0}
 var last_element_feedback: String = ""
+var _last_network_damage_log_time := -INF
 
 @onready var visual: Node3D = get_node(visual_root_path) as Node3D
 @onready var wand_socket: Node3D = get_node(wand_socket_path) as Node3D
@@ -315,13 +316,15 @@ func receive_network_snapshot(snapshot: Dictionary) -> void:
 		rotation.y = lerp_angle(rotation.y, float(snapshot.get("rotation_y", rotation.y)), 0.35)
 		health = float(snapshot.get("health", health))
 		mana = float(snapshot.get("mana", mana))
+		dead = bool(snapshot.get("dead", dead))
 		return
 	_snapshot_buffer.append({
 		"received_at": Time.get_ticks_msec() / 1000.0,
 		"position": snapshot.get("position", global_position),
 		"rotation_y": snapshot.get("rotation_y", rotation.y),
 		"health": snapshot.get("health", health),
-		"mana": snapshot.get("mana", mana)
+		"mana": snapshot.get("mana", mana),
+		"dead": snapshot.get("dead", dead)
 	})
 	while _snapshot_buffer.size() > 12:
 		_snapshot_buffer.pop_front()
@@ -343,6 +346,7 @@ func _apply_remote_snapshot(_delta: float) -> void:
 	rotation.y = lerp_angle(float(first.rotation_y), float(second.rotation_y), alpha)
 	health = lerpf(float(first.health), float(second.health), alpha)
 	mana = lerpf(float(first.mana), float(second.mana), alpha)
+	dead = bool(second.dead)
 
 func _configure_equipment_stats() -> void:
 	armor = 0.0
@@ -611,7 +615,7 @@ func dagger_attack() -> bool:
 		raid.spawn_spell_impact(global_position + -global_transform.basis.z * 1.1 + Vector3(0, 0.5, 0), dagger.debug_color, dagger.attack_range * 0.65)
 	return hit_any
 
-func take_damage(amount: float, source: Vector3 = Vector3.ZERO, bleed_chance: float = 0.15, element: String = "physical") -> void:
+func take_damage(amount: float, source: Vector3 = Vector3.ZERO, bleed_chance: float = 0.15, element: String = "physical", source_label: String = "unknown") -> void:
 	if dead:
 		return
 	var attack_element := ElementSystem.normalize_primary(element)
@@ -626,7 +630,12 @@ func take_damage(amount: float, source: Vector3 = Vector3.ZERO, bleed_chance: fl
 	last_element_feedback = "WEAKNESS" if relationship > 1.0 else "RESISTED" if relationship < 1.0 else ""
 	if relationship > 1.0:
 		_show_message("ELEMENTAL WEAKNESS: %s overcomes %s" % [attack_element.to_upper(), defense_element.to_upper()])
+	var health_before := health
 	health = maxf(0.0, health - reduced)
+	var now_seconds := Time.get_ticks_msec() / 1000.0
+	if network_enabled and multiplayer.is_server() and now_seconds - _last_network_damage_log_time >= 0.5:
+		print("[DAMAGE] peer=%d source=%s element=%s amount=%.2f hp=%.2f->%.2f" % [network_peer_id, source_label, attack_element, reduced, health_before, health])
+		_last_network_damage_log_time = now_seconds
 	last_damage_time = Time.get_ticks_msec() / 1000.0
 	mana_regen_delay = maxf(mana_regen_delay, 3.0)
 	if element == "physical" and randf() < bleed_chance:
@@ -759,7 +768,7 @@ func _update_status(delta: float) -> void:
 		bleed_tick += delta
 		if bleed_tick >= 2.0:
 			bleed_tick = 0.0
-			take_damage(2.0, Vector3.ZERO, 0.0)
+			take_damage(2.0, Vector3.ZERO, 0.0, "physical", "bleeding")
 	if burn_remaining > 0.0:
 		burn_remaining -= delta
 		health = maxf(0.0, health - burn_damage_per_second * delta)
