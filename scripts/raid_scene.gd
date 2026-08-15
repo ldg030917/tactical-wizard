@@ -59,8 +59,10 @@ var grass_wall_refresh_remaining: float = 0.0
 var grass_wall_generation: int = 0
 var explosion_devastated: bool = false
 var network_players: Dictionary = {}
+var network_enemies: Dictionary = {}
 var network_snapshot_elapsed := 0.0
 var network_raid_active := false
+var _next_network_enemy_id := 1
 
 const GRASS_WALL_PLACEMENTS: Array[Dictionary] = [
 	{"position":Vector3(-12, 1.4, -4), "rotation":0.0},
@@ -98,17 +100,30 @@ func _setup_network_raid() -> void:
 		_spawn_editor_placed_enemies()
 
 
-func begin_network_raid(peer_ids: Array) -> void:
-	if not multiplayer.is_server() or network_raid_active:
+func spawn_network_raid_member(peer_id: int) -> void:
+	if not multiplayer.is_server() or network_players.has(peer_id):
 		return
+	# The joining peer has its Raid Scene loaded at this point. Replay the
+	# persistent world first, then announce the new player to active members.
 	network_raid_active = true
-	for peer_value: Variant in peer_ids:
-		var peer_id := int(peer_value)
-		var offset_index := network_players.size()
-		var spawn_position := player_spawn.global_position + Vector3(float(offset_index % 3) * 1.25, 0.0, float(offset_index / 3) * 1.25)
-		_create_network_raid_player(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
-		spawn_network_raid_player.rpc(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
-	print("[RAID] Spawned %d network players for peers=%s" % [network_players.size(), str(network_players.keys())])
+	_sync_network_world_to_peer(peer_id)
+	var offset_index := network_players.size()
+	var spawn_position := player_spawn.global_position + Vector3(float(offset_index % 3) * 1.25, 0.0, float(offset_index / 3) * 1.25)
+	_create_network_raid_player(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
+	for target_peer: int in NetworkManager.raid_members:
+		spawn_network_raid_player.rpc_id(target_peer, peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
+	print("[RAID] Spawned network player peer=%d players=%s" % [peer_id, str(network_players.keys())])
+
+
+func _sync_network_world_to_peer(peer_id: int) -> void:
+	for existing_peer: int in network_players:
+		var existing_player := network_players[existing_peer] as PlayerController
+		if is_instance_valid(existing_player):
+			spawn_network_raid_player.rpc_id(peer_id, existing_peer, existing_player.global_position, existing_player.rotation.y)
+	for enemy_id: String in network_enemies:
+		var enemy := network_enemies[enemy_id] as EnemyController
+		if is_instance_valid(enemy):
+			spawn_network_enemy.rpc_id(peer_id, _network_enemy_spawn_data(enemy))
 
 
 func _process(delta: float) -> void:
@@ -134,6 +149,12 @@ func _process_network_raid(delta: float) -> void:
 		if is_instance_valid(network_player):
 			states.append({"peer_id": peer_id, "position": network_player.global_position, "rotation_y": network_player.rotation.y, "health": network_player.health, "mana": network_player.mana, "dead": network_player.dead})
 	receive_network_raid_snapshots.rpc(states)
+	var enemy_states: Array[Dictionary] = []
+	for enemy_id: String in network_enemies:
+		var enemy := network_enemies[enemy_id] as EnemyController
+		if is_instance_valid(enemy):
+			enemy_states.append({"enemy_id": enemy_id, "position": enemy.global_position, "rotation_y": enemy.rotation.y, "health": enemy.health, "dead": enemy.dead})
+	receive_network_enemy_snapshots.rpc(enemy_states)
 
 
 func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> PlayerController:
@@ -148,7 +169,9 @@ func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_ro
 	network_player.global_position = spawn_position
 	network_player.rotation.y = spawn_rotation_y
 	network_players[peer_id] = network_player
-	print("[PLAYER] Spawn peer=%d local=%s position=%s" % [peer_id, str(not multiplayer.is_server() and peer_id == multiplayer.get_unique_id()), str(spawn_position)])
+	var local_peer := multiplayer.get_unique_id()
+	var is_local := not multiplayer.is_server() and peer_id == local_peer
+	print("[PLAYER] init peer=%d local_peer=%d local=%s position=%s" % [peer_id, local_peer, str(is_local), str(spawn_position)])
 	if not multiplayer.is_server() and peer_id == multiplayer.get_unique_id():
 		player = network_player
 		hud.visible = true
@@ -157,18 +180,71 @@ func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_ro
 	return network_player
 
 
+func _network_enemy_spawn_data(enemy: EnemyController) -> Dictionary:
+	return {
+		"enemy_id": enemy.network_enemy_id,
+		"scene_path": enemy.scene_file_path,
+		"enemy_data_path": enemy.enemy_data.resource_path if enemy.enemy_data != null else "",
+		"enemy_type": enemy.enemy_type,
+		"primary_element": enemy.primary_element,
+		"patrol_radius": enemy.patrol_radius,
+		"position": enemy.global_position,
+		"rotation_y": enemy.rotation.y
+	}
+
+
+func _register_network_enemy(enemy: EnemyController) -> void:
+	if not multiplayer.is_server() or enemy == null:
+		return
+	enemy.network_enemy_id = "enemy_%d" % _next_network_enemy_id
+	_next_network_enemy_id += 1
+	network_enemies[enemy.network_enemy_id] = enemy
+	print("[ENEMY] spawn id=%s type=%s position=%s" % [enemy.network_enemy_id, enemy.enemy_type, str(enemy.global_position)])
+
+
 func _on_network_raid_peer_disconnected(peer_id: int) -> void:
 	var network_player := network_players.get(peer_id) as PlayerController
 	network_players.erase(peer_id)
 	if is_instance_valid(network_player):
 		network_player.queue_free()
-	remove_network_raid_player.rpc(peer_id)
+	for target_peer: int in NetworkManager.raid_members:
+		remove_network_raid_player.rpc_id(target_peer, peer_id)
 
 
 @rpc("authority", "call_remote", "reliable")
 func spawn_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> void:
 	if not multiplayer.is_server():
 		_create_network_raid_player(peer_id, spawn_position, spawn_rotation_y)
+
+
+@rpc("authority", "call_remote", "reliable")
+func spawn_network_enemy(spawn_data: Dictionary) -> void:
+	if multiplayer.is_server():
+		return
+	var enemy_id := str(spawn_data.get("enemy_id", ""))
+	if enemy_id.is_empty() or network_enemies.has(enemy_id):
+		return
+	var scene_path := str(spawn_data.get("scene_path", ""))
+	var scene := load(scene_path) as PackedScene
+	if scene == null:
+		push_error("[ENEMY] replication failed id=%s scene=%s" % [enemy_id, scene_path])
+		return
+	var enemy := scene.instantiate() as EnemyController
+	if enemy == null:
+		return
+	var data_path := str(spawn_data.get("enemy_data_path", ""))
+	if not data_path.is_empty():
+		enemy.enemy_data = load(data_path) as EnemyData
+	enemy.enemy_type = str(spawn_data.get("enemy_type", enemy.enemy_type))
+	enemy.primary_element = str(spawn_data.get("primary_element", enemy.primary_element))
+	enemy.patrol_radius = float(spawn_data.get("patrol_radius", enemy.patrol_radius))
+	enemy.configure_network_replica(enemy_id)
+	runtime_actors.add_child(enemy)
+	var spawn_position: Vector3 = spawn_data.get("position", Vector3.ZERO)
+	enemy.global_position = spawn_position
+	enemy.rotation.y = float(spawn_data.get("rotation_y", 0.0))
+	network_enemies[enemy_id] = enemy
+	print("[ENEMY] replicated id=%s local_peer=%d position=%s" % [enemy_id, multiplayer.get_unique_id(), str(spawn_position)])
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -179,6 +255,16 @@ func remove_network_raid_player(peer_id: int) -> void:
 	network_players.erase(peer_id)
 	if is_instance_valid(network_player):
 		network_player.queue_free()
+
+
+@rpc("authority", "call_remote", "unreliable", 1)
+func receive_network_enemy_snapshots(states: Array[Dictionary]) -> void:
+	if multiplayer.is_server():
+		return
+	for state: Dictionary in states:
+		var enemy := network_enemies.get(str(state.get("enemy_id", ""))) as EnemyController
+		if is_instance_valid(enemy):
+			enemy.receive_network_snapshot(state)
 
 
 @rpc("authority", "call_remote", "unreliable", 1)
@@ -303,6 +389,8 @@ func _spawn_editor_placed_enemies() -> void:
 			var spawned := (child as EnemySpawnPoint).spawn_enemies(runtime_actors, rng)
 			for enemy: EnemyController in spawned:
 				enemy.primary_element = region_primary_element
+				if NetworkManager.is_network_game() and multiplayer.is_server():
+					_register_network_enemy(enemy)
 
 func _spawn_editor_placed_loot() -> void:
 	for child: Node in loot_spawns.get_children():
@@ -766,11 +854,44 @@ func set_extraction_status(text: String) -> void:
 func complete_extraction(extraction_name: String) -> void:
 	if raid_complete:
 		return
+	if NetworkManager.is_connected_to_server():
+		raid_complete = true
+		hud.set_extraction_status("EXTRACTION CONFIRMED")
+		NetworkManager.request_raid_extraction(extraction_name)
+		return
 	raid_complete = true
 	var summary: Dictionary = GameState.finish_raid(true, kills, extraction_name)
 	var main: Node = get_tree().current_scene
 	if main.has_method("show_end_screen"):
 		main.show_end_screen(summary)
+
+
+func extract_network_player(peer_id: int, extraction_name: String) -> bool:
+	if not multiplayer.is_server():
+		return false
+	var network_player := network_players.get(peer_id) as PlayerController
+	if not is_instance_valid(network_player):
+		return false
+	if not _can_extract_network_player(network_player, extraction_name):
+		print("[RAID] rejected extraction peer=%d reason=outside_zone" % peer_id)
+		return false
+	network_players.erase(peer_id)
+	network_player.queue_free()
+	for target_peer: int in NetworkManager.raid_members:
+		remove_network_raid_player.rpc_id(target_peer, peer_id)
+	print("[RAID] extracted peer=%d via=%s" % [peer_id, extraction_name])
+	return true
+
+
+func _can_extract_network_player(network_player: PlayerController, extraction_name: String) -> bool:
+	for zone: Node in extraction_zones.get_children():
+		if not zone is ExtractionZone:
+			continue
+		var extraction := zone as ExtractionZone
+		if extraction.extraction_name != extraction_name:
+			continue
+		return extraction.global_position.distance_to(network_player.global_position) <= extraction.radius + 0.25
+	return false
 
 func on_player_died() -> void:
 	if raid_complete:

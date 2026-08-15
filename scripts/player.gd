@@ -154,10 +154,28 @@ func is_local_network_player() -> bool:
 
 
 func _configure_network_presentation() -> void:
-	if multiplayer.is_server() or not is_local_network_player():
-		camera.current = false
-		placement_preview.visible = false
-		trajectory_preview.visible = false
+	var local_peer := multiplayer.get_unique_id()
+	var is_local := is_local_network_player()
+	print("[PLAYER] init peer=%d local_peer=%d local=%s" % [network_peer_id, local_peer, str(is_local)])
+	if is_local:
+		_initialize_local_network_player()
+	else:
+		_initialize_remote_network_player()
+
+
+func _initialize_local_network_player() -> void:
+	# configure_network() runs before add_child(), so this decision is valid in
+	# _ready() for both the first and a late-joining Raid player.
+	camera.current = true
+	set_process_unhandled_input(true)
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _initialize_remote_network_player() -> void:
+	camera.current = false
+	placement_preview.visible = false
+	trajectory_preview.visible = false
+	set_process_unhandled_input(false)
 	if multiplayer.is_server():
 		visual.visible = false
 

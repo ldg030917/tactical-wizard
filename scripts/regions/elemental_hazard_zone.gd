@@ -17,6 +17,10 @@ func _ready() -> void:
 	$Visual.material_override = VisualFactory.material(ElementSystem.color(hazard_element), 1.4, true)
 
 func _physics_process(delta: float) -> void:
+	# In a network raid, hazard authority belongs to the dedicated server. Client
+	# copies are visual only and must never apply a second local damage path.
+	if NetworkManager.is_network_game() and not multiplayer.is_server():
+		return
 	for player: PlayerController in affected_players:
 		if not is_instance_valid(player) or player.dead:
 			continue

@@ -42,8 +42,9 @@ func _ready() -> void:
 		pause_menu.visible = false
 		network_status_label.visible = false
 		print("Main started in dedicated server mode.")
-		NetworkManager.raid_start_requested.connect(_on_server_raid_start_requested)
-		NetworkManager.all_raid_clients_loaded.connect(_on_all_raid_clients_loaded)
+		NetworkManager.raid_join_requested.connect(_on_server_raid_join_requested)
+		NetworkManager.raid_client_loaded.connect(_on_server_raid_client_loaded)
+		NetworkManager.raid_extraction_requested.connect(_on_server_raid_extraction_requested)
 		return
 
 	connect_button.pressed.connect(_connect_to_server)
@@ -56,6 +57,7 @@ func _ready() -> void:
 	NetworkManager.session_state_changed.connect(_on_session_state_changed)
 	NetworkManager.ping_updated.connect(_on_ping_updated)
 	NetworkManager.load_raid_requested.connect(_on_client_load_raid_requested)
+	NetworkManager.return_to_lobby_requested.connect(_on_client_return_to_lobby_requested)
 	(result_ui.get_node("%ReturnButton") as Button).pressed.connect(_return_from_result)
 	(pause_menu.get_node("%ResumeButton") as Button).pressed.connect(toggle_pause)
 	pause_menu.get_node("Panel/Layout/ReturnButton").pressed.connect(_abandon_to_base)
@@ -148,13 +150,14 @@ func _start_raid_scene() -> void:
 	session_phase = SessionPhase.IN_RAID
 
 
-func _on_server_raid_start_requested() -> void:
-	if active_area != null:
-		print("[RAID] Ignored start request: server already has an active area")
-		return
-	_start_raid_scene()
-	print("[RAID] Server loading raid scene")
-	NetworkManager.server_raid_scene_ready()
+func _on_server_raid_join_requested(peer_id: int) -> void:
+	# The server owns one persistent Raid world. A peer is added to it only after
+	# that peer explicitly asks to join; connected lobby peers remain untouched.
+	if active_area == null:
+		_start_raid_scene()
+		print("[RAID] Server created raid world")
+	if active_area is RaidScene:
+		NetworkManager.server_begin_raid_join(peer_id)
 
 
 func _on_client_load_raid_requested() -> void:
@@ -163,11 +166,20 @@ func _on_client_load_raid_requested() -> void:
 	NetworkManager.client_raid_scene_ready()
 
 
-func _on_all_raid_clients_loaded() -> void:
+func _on_server_raid_client_loaded(peer_id: int) -> void:
 	if active_area is RaidScene:
-		print("[RAID] Server starting player spawn")
-		(active_area as RaidScene).begin_network_raid(NetworkManager.raid_members.keys())
-		NetworkManager.server_mark_raid_started()
+		(active_area as RaidScene).spawn_network_raid_member(peer_id)
+
+
+func _on_server_raid_extraction_requested(peer_id: int, extraction_name: String) -> void:
+	if active_area is RaidScene:
+		if (active_area as RaidScene).extract_network_player(peer_id, extraction_name):
+			NetworkManager.server_complete_raid_extraction(peer_id)
+
+
+func _on_client_return_to_lobby_requested() -> void:
+	print("[LOBBY] Returning multiplayer peer=%d" % multiplayer.get_unique_id())
+	show_base()
 
 func travel_to_region(region_id: String) -> bool:
 	if not active_area is RaidScene:
@@ -218,6 +230,10 @@ func _return_from_result() -> void:
 
 func _abandon_to_base() -> void:
 	get_tree().paused = false
+	if NetworkManager.is_connected_to_server() and active_area is RaidScene:
+		pause_menu.visible = false
+		NetworkManager.request_raid_extraction("abandoned")
+		return
 	if GameState.in_raid:
 		GameState.finish_raid(false, GameState.raid_kills)
 	pause_menu.visible = false

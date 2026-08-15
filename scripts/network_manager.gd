@@ -7,9 +7,11 @@ signal client_connected
 signal client_connection_failed(message: String)
 signal server_started
 signal ping_updated(milliseconds: int)
-signal raid_start_requested
+signal raid_join_requested(peer_id: int)
 signal load_raid_requested
-signal all_raid_clients_loaded
+signal raid_client_loaded(peer_id: int)
+signal raid_extraction_requested(peer_id: int, extraction_name: String)
+signal return_to_lobby_requested
 
 const DEFAULT_PORT := 7000
 const DEFAULT_SERVER_ADDRESS := "158.180.84.54"
@@ -17,6 +19,7 @@ const MAX_CLIENTS := 32
 const PING_INTERVAL_SECONDS := 1.0
 
 enum RaidLifecycle { LOBBY, LOADING, IN_RAID }
+enum PeerRaidState { MULTIPLAYER_LOBBY, LOADING_RAID, IN_RAID, RETURNING_TO_LOBBY }
 
 var is_server_mode := false
 var is_connecting := false
@@ -24,6 +27,7 @@ var ping_ms := -1
 var _ping_elapsed := 0.0
 var connected_peer_ids: Dictionary = {}
 var raid_members: Dictionary = {}
+var peer_raid_states: Dictionary = {}
 var _raid_loading_peers: Dictionary = {}
 var raid_lifecycle := RaidLifecycle.LOBBY
 
@@ -125,26 +129,49 @@ func request_raid_start() -> void:
 		_request_raid_start.rpc_id(1)
 
 
-func server_raid_scene_ready() -> void:
-	if not multiplayer.is_server():
+func server_begin_raid_join(peer_id: int) -> void:
+	if not multiplayer.is_server() or not connected_peer_ids.has(peer_id):
 		return
-	raid_members = connected_peer_ids.duplicate()
-	_raid_loading_peers = raid_members.duplicate()
-	raid_lifecycle = RaidLifecycle.LOADING
-	print("[STATE] server raid_lifecycle=LOADING")
-	print("[RAID] members=%s" % str(raid_members.keys()))
-	for peer_id: int in raid_members:
-		print("[RAID] sending load request peer=%d" % peer_id)
-		_load_raid_on_clients.rpc_id(peer_id)
-	if _raid_loading_peers.is_empty():
-		print("[RAID] no connected clients; spawning skipped")
-		all_raid_clients_loaded.emit()
+	var peer_state := int(peer_raid_states.get(peer_id, PeerRaidState.MULTIPLAYER_LOBBY))
+	if peer_state != PeerRaidState.MULTIPLAYER_LOBBY:
+		print("[RAID] ignored join peer=%d state=%d" % [peer_id, peer_state])
+		return
+	print("[RAID] join requested peer=%d" % peer_id)
+	print("[RAID] members before=%s" % str(raid_members.keys()))
+	raid_members[peer_id] = true
+	peer_raid_states[peer_id] = PeerRaidState.LOADING_RAID
+	_raid_loading_peers[peer_id] = true
+	if raid_lifecycle == RaidLifecycle.LOBBY:
+		raid_lifecycle = RaidLifecycle.LOADING
+		print("[STATE] server raid_lifecycle=LOADING")
+	print("[RAID] members after=%s" % str(raid_members.keys()))
+	print("[RAID] sending load request peer=%d" % peer_id)
+	_load_raid_on_clients.rpc_id(peer_id)
 
 
 func client_raid_scene_ready() -> void:
 	if is_connected_to_server():
 		print("[RAID] Client loaded scene peer=%d" % multiplayer.get_unique_id())
 		_client_raid_loaded.rpc_id(1)
+
+
+func request_raid_extraction(extraction_name: String) -> void:
+	if is_connected_to_server():
+		_request_raid_extraction.rpc_id(1, extraction_name)
+
+
+func server_complete_raid_extraction(peer_id: int) -> void:
+	if not multiplayer.is_server() or not raid_members.has(peer_id):
+		return
+	peer_raid_states[peer_id] = PeerRaidState.RETURNING_TO_LOBBY
+	raid_members.erase(peer_id)
+	_raid_loading_peers.erase(peer_id)
+	print("[RAID] extracted peer=%d members=%s" % [peer_id, str(raid_members.keys())])
+	_load_lobby_on_client.rpc_id(peer_id)
+	peer_raid_states[peer_id] = PeerRaidState.MULTIPLAYER_LOBBY
+	if raid_members.is_empty():
+		raid_lifecycle = RaidLifecycle.LOBBY
+		print("[STATE] server raid_lifecycle=LOBBY")
 
 
 func server_mark_raid_started() -> void:
@@ -173,18 +200,20 @@ func _stop_current_peer() -> void:
 func _on_peer_connected(peer_id: int) -> void:
 	if is_server_mode:
 		connected_peer_ids[peer_id] = true
+		peer_raid_states[peer_id] = PeerRaidState.MULTIPLAYER_LOBBY
 		print("[NETWORK] peer_connected=%d peers=%s" % [peer_id, str(connected_peer_ids.keys())])
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	if is_server_mode:
 		connected_peer_ids.erase(peer_id)
+		peer_raid_states.erase(peer_id)
+		raid_members.erase(peer_id)
 		print("[NETWORK] peer_disconnected=%d peers=%s" % [peer_id, str(connected_peer_ids.keys())])
 		if raid_lifecycle == RaidLifecycle.LOADING and _raid_loading_peers.erase(peer_id):
 			print("[RAID] peer=%d disconnected while loading; ready=%d/%d" % [peer_id, raid_members.size() - _raid_loading_peers.size(), raid_members.size()])
-		if raid_lifecycle == RaidLifecycle.LOADING and _raid_loading_peers.is_empty():
-			print("[RAID] all remaining members loaded; spawning players")
-			all_raid_clients_loaded.emit()
+		if raid_members.is_empty():
+			raid_lifecycle = RaidLifecycle.LOBBY
 
 
 func _on_connected_to_server() -> void:
@@ -221,11 +250,11 @@ func _request_raid_start() -> void:
 		return
 	var requester := multiplayer.get_remote_sender_id()
 	if requester in connected_peer_ids:
-		if raid_lifecycle != RaidLifecycle.LOBBY:
-			print("[RAID] ignored start request peer=%d lifecycle=%d" % [requester, raid_lifecycle])
+		var peer_state := int(peer_raid_states.get(requester, PeerRaidState.MULTIPLAYER_LOBBY))
+		if peer_state != PeerRaidState.MULTIPLAYER_LOBBY:
+			print("[RAID] ignored join request peer=%d state=%d" % [requester, peer_state])
 			return
-		print("[RAID] start requested by peer=%d" % requester)
-		raid_start_requested.emit()
+		raid_join_requested.emit(requester)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -244,10 +273,25 @@ func _client_raid_loaded() -> void:
 		print("[RAID] ignored unexpected ready peer=%d" % loaded_peer)
 		return
 	_raid_loading_peers.erase(loaded_peer)
-	print("[RAID] peer=%d loaded; ready=%d/%d" % [loaded_peer, raid_members.size() - _raid_loading_peers.size(), raid_members.size()])
-	if _raid_loading_peers.is_empty():
-		print("[RAID] all members loaded; spawning players")
-		all_raid_clients_loaded.emit()
+	peer_raid_states[loaded_peer] = PeerRaidState.IN_RAID
+	raid_lifecycle = RaidLifecycle.IN_RAID
+	print("[RAID] peer=%d loaded; state=IN_RAID members=%s" % [loaded_peer, str(raid_members.keys())])
+	print("[STATE] server raid_lifecycle=IN_RAID")
+	raid_client_loaded.emit(loaded_peer)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_raid_extraction(extraction_name: String) -> void:
+	if multiplayer.is_server():
+		var peer_id := multiplayer.get_remote_sender_id()
+		if int(peer_raid_states.get(peer_id, PeerRaidState.MULTIPLAYER_LOBBY)) == PeerRaidState.IN_RAID:
+			raid_extraction_requested.emit(peer_id, extraction_name)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _load_lobby_on_client() -> void:
+	if is_connected_to_server():
+		return_to_lobby_requested.emit()
 
 
 @rpc("any_peer", "call_remote", "unreliable")

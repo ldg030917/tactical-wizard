@@ -43,6 +43,8 @@ var primary_element: String = "neutral"
 var elemental_resistance: float = 0.0
 var last_weakness_triggered: bool = false
 var aggroed: bool = false
+var network_enemy_id := ""
+var network_replica := false
 
 @onready var visual: Node3D = %Visual
 @onready var health_bar: Label3D = %HealthBar
@@ -57,6 +59,8 @@ func _ready() -> void:
 	collision_mask = 1 | 2 | 4
 	rng.randomize()
 	_configure_variant()
+	if network_replica:
+		return
 	patrol_origin = global_position
 	target_position = _random_patrol_point()
 	state = State.PATROL
@@ -112,6 +116,8 @@ func _find_player() -> void:
 	player = closest_player
 
 func _physics_process(delta: float) -> void:
+	if network_replica:
+		return
 	if dead:
 		return
 	_update_status(delta)
@@ -235,7 +241,8 @@ func _attack(distance: float) -> void:
 		return
 	if enemy_type in ["monster", "creature"]:
 		if distance <= attack_range + 0.35:
-			player.take_damage(damage, global_position, 0.24, primary_element, "enemy:%s#%d" % [enemy_type, get_instance_id()])
+			var source_label := "enemy:%s#%s distance=%.2f range=%.2f" % [enemy_type, network_enemy_id if not network_enemy_id.is_empty() else str(get_instance_id()), distance, attack_range]
+			player.take_damage(damage, global_position, 0.24, primary_element, source_label)
 		attack_cooldown = attack_interval
 		return
 	var raid: Node = _raid_scene()
@@ -317,6 +324,23 @@ func apply_status(status_id: String, duration: float, power: float) -> void:
 func apply_knockback(force: Vector3) -> void:
 	if enemy_type in ["monster", "creature"]:
 		knockback_velocity += force
+
+
+func configure_network_replica(enemy_id: String) -> void:
+	network_enemy_id = enemy_id
+	network_replica = true
+
+
+func receive_network_snapshot(snapshot: Dictionary) -> void:
+	if not network_replica:
+		return
+	var snapshot_position: Vector3 = snapshot.get("position", global_position)
+	global_position = global_position.lerp(snapshot_position, 0.55)
+	rotation.y = lerp_angle(rotation.y, float(snapshot.get("rotation_y", rotation.y)), 0.55)
+	health = float(snapshot.get("health", health))
+	dead = bool(snapshot.get("dead", dead))
+	health_bar.text = "%d / %d" % [int(ceil(health)), int(max_health)]
+	visible = not dead
 
 func _update_status(delta: float) -> void:
 	if burn_remaining > 0.0:
