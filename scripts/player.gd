@@ -42,6 +42,12 @@ var _snapshot_buffer: Array[Dictionary] = []
 @export_range(5.0, 30.0, 0.5, "suffix:m") var camera_height: float = 15.0
 @export_range(2.0, 25.0, 0.5, "suffix:m") var camera_distance: float = 11.0
 @export_range(0.0, 1.0, 0.05) var aim_look_ahead: float = 0.28
+@export_range(0.1, 3.0, 0.05) var free_aim_cursor_sensitivity: float = 1.0
+@export_range(0.05, 0.8, 0.01) var free_aim_dead_zone_ratio: float = 0.28
+@export_range(0.1, 1.5, 0.05) var free_aim_body_turn_speed: float = 2.4
+@export_range(0.1, 1.5, 0.05) var free_aim_pitch_turn_speed: float = 1.65
+@export_range(10.0, 300.0, 1.0) var free_aim_ray_distance: float = 90.0
+@export_range(10.0, 400.0, 1.0) var free_aim_cursor_recenter_pixels_per_radian: float = 115.0
 
 @export_category("Scene Node References")
 @export_node_path("Node3D") var visual_root_path: NodePath = ^"Visual"
@@ -103,7 +109,14 @@ var _network_aim_yaw := 0.0
 var _network_aim_pitch := 0.0
 var _network_aim_initialized := false
 var _local_snapshot_rotation_suppressed_logged := false
-const NETWORK_AIM_MOUSE_SENSITIVITY := 0.006
+var _virtual_aim_position := Vector2.ZERO
+var _virtual_aim_initialized := false
+var _network_aim_origin := Vector3.ZERO
+var _network_aim_direction := Vector3.FORWARD
+var _free_aim_in_turn_zone := false
+const NETWORK_RECONCILE_MIN_DISTANCE := 0.035
+const NETWORK_RECONCILE_SNAP_DISTANCE := 2.0
+const NETWORK_RECONCILE_BLEND := 0.12
 
 @onready var visual: Node3D = get_node(visual_root_path) as Node3D
 @onready var wand_socket: Node3D = get_node(wand_socket_path) as Node3D
@@ -175,6 +188,7 @@ func _initialize_local_network_player() -> void:
 	set_process_unhandled_input(true)
 	_network_aim_yaw = rotation.y
 	_network_aim_initialized = true
+	_initialize_virtual_aim_cursor()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	print("[AIM] local player initialized peer=%d snapshot_rotation_applied=false" % network_peer_id)
 
@@ -260,12 +274,12 @@ func _network_physics_process(delta: float) -> void:
 	if is_local_network_player():
 		if dead:
 			return
-		var root: Node = get_tree().current_scene
-		if root.has_method("is_local_ui_open") and root.is_local_ui_open():
+		if _is_free_aim_ui_blocked():
 			velocity = Vector3.ZERO
 			return
 		# Smooth the local cooldown UI between authoritative snapshots.
 		_tick_combat_cooldowns(delta)
+		_update_free_aim_turn(delta)
 		_update_aim()
 		_update_movement(delta) # local prediction; server snapshots reconcile it.
 		_update_camera(delta)
@@ -273,7 +287,7 @@ func _network_physics_process(delta: float) -> void:
 		_network_send_elapsed += delta
 		if _network_send_elapsed >= 1.0 / 30.0:
 			_network_send_elapsed = 0.0
-			submit_movement_input.rpc_id(1, Input.get_vector("move_left", "move_right", "move_up", "move_down"), rotation.y, Input.is_action_pressed("sprint"), Input.is_action_pressed("crouch"), Input.is_action_pressed("cancel_cast"))
+			submit_movement_input.rpc_id(1, Input.get_vector("move_left", "move_right", "move_up", "move_down"), rotation.y, _network_aim_pitch, Input.is_action_pressed("sprint"), Input.is_action_pressed("crouch"), Input.is_action_pressed("cancel_cast"))
 		return
 	_apply_remote_snapshot(delta)
 	_update_visuals(delta)
@@ -282,9 +296,10 @@ func _network_physics_process(delta: float) -> void:
 func _handle_network_input(event: InputEvent) -> void:
 	if dead or not is_local_network_player():
 		return
+	if _is_free_aim_ui_blocked():
+		return
 	if event is InputEventMouseMotion:
-		_network_aim_yaw -= (event as InputEventMouseMotion).relative.x * NETWORK_AIM_MOUSE_SENSITIVITY
-		_network_aim_pitch = clampf(_network_aim_pitch - (event as InputEventMouseMotion).relative.y * NETWORK_AIM_MOUSE_SENSITIVITY, -0.65, 0.65)
+		_move_virtual_aim_cursor((event as InputEventMouseMotion).relative * free_aim_cursor_sensitivity)
 		return
 	if event.is_action_pressed("spell_page_1"):
 		select_spell_page(0)
@@ -300,9 +315,9 @@ func _handle_network_input(event: InputEvent) -> void:
 		else:
 			var config := current_spell_config()
 			print("[CAST_INPUT] peer=%d page=%d spell=%s" % [network_peer_id, selected_page, config.base_spell.spell_id if config != null else "invalid"])
-			print("[CAST_REQUEST] peer=%d page=%d target=%s" % [network_peer_id, selected_page, str(aim_point)])
+			print("[CAST_REQUEST] peer=%d page=%d aim_origin=%s aim_direction=%s" % [network_peer_id, selected_page, str(_network_aim_origin), str(_network_aim_direction)])
 			_log_network_cast_aim()
-			request_spell_cast.rpc_id(1, selected_page, aim_point)
+			request_spell_cast.rpc_id(1, selected_page, _network_aim_origin, _network_aim_direction)
 	elif event.is_action_pressed("dagger_attack"):
 		request_dagger_attack.rpc_id(1)
 	elif event.is_action_pressed("inventory") and in_raid:
@@ -316,11 +331,12 @@ func _handle_network_input(event: InputEvent) -> void:
 
 
 @rpc("any_peer", "call_remote", "unreliable", 1)
-func submit_movement_input(input: Vector2, rotation_y: float, sprint_pressed: bool, crouch_pressed: bool, focus_pressed: bool) -> void:
+func submit_movement_input(input: Vector2, rotation_y: float, aim_pitch: float, sprint_pressed: bool, crouch_pressed: bool, focus_pressed: bool) -> void:
 	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != network_peer_id:
 		return
 	_network_move_input = input.limit_length(1.0)
 	_network_rotation_y = rotation_y
+	_network_aim_pitch = clampf(aim_pitch, -0.65, 0.65)
 	_network_sprint = sprint_pressed
 	_network_crouch = crouch_pressed
 	_network_focus = focus_pressed
@@ -333,7 +349,7 @@ func request_dagger_attack() -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func request_spell_cast(page_index: int, requested_target: Vector3) -> void:
+func request_spell_cast(page_index: int, reported_aim_origin: Vector3, reported_aim_direction: Vector3) -> void:
 	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != network_peer_id:
 		return
 	if page_index < 0 or page_index >= page_configs.size():
@@ -349,11 +365,16 @@ func request_spell_cast(page_index: int, requested_target: Vector3) -> void:
 	if not rejection_reason.is_empty():
 		print("[CAST_REJECT] peer=%d spell=%s reason=%s" % [network_peer_id, config.base_spell.spell_id, rejection_reason])
 		return
-	var offset := requested_target - cast_origin.global_position
-	if offset.length() > config.range_meters:
-		requested_target = cast_origin.global_position + offset.normalized() * config.range_meters
+	if reported_aim_direction.length_squared() < 0.001:
+		print("[CAST_REJECT] peer=%d spell=%s reason=invalid_aim_direction" % [network_peer_id, config.base_spell.spell_id])
+		return
+	var max_origin_distance := camera_height + camera_distance + 4.0
+	if reported_aim_origin.distance_to(global_position) > max_origin_distance:
+		print("[CAST_REJECT] peer=%d spell=%s reason=invalid_aim_origin" % [network_peer_id, config.base_spell.spell_id])
+		return
+	var requested_target := _server_aim_target(reported_aim_origin, reported_aim_direction.normalized(), config.range_meters)
 	var projectile_direction := (requested_target - cast_origin.global_position).normalized()
-	print("[AIM] server cast peer=%d muzzle=%s target=%s projectile_dir=%s" % [network_peer_id, str(cast_origin.global_position), str(requested_target), str(projectile_direction)])
+	print("[AIM] server cast peer=%d aim_origin=%s aim_direction=%s muzzle=%s target=%s projectile_dir=%s" % [network_peer_id, str(reported_aim_origin), str(reported_aim_direction.normalized()), str(cast_origin.global_position), str(requested_target), str(projectile_direction)])
 	if cast_selected_spell_immediate(requested_target):
 		print("[CAST_ACCEPT] peer=%d spell=%s cooldown=%.3f mana=%.2f" % [network_peer_id, config.base_spell.spell_id, cooldown_remaining(), mana])
 	else:
@@ -373,7 +394,16 @@ func receive_network_snapshot(snapshot: Dictionary) -> void:
 		return
 	if is_local_network_player():
 		var authoritative_position: Vector3 = snapshot.get("position", global_position)
-		global_position = global_position.lerp(authoritative_position, 0.35)
+		var position_error := authoritative_position - global_position
+		var error_distance := position_error.length()
+		if error_distance >= NETWORK_RECONCILE_SNAP_DISTANCE:
+			# A large divergence is a genuine correction (spawn, collision, or a
+			# missed input); resolve it clearly instead of oscillating for seconds.
+			global_position = authoritative_position
+		elif error_distance >= NETWORK_RECONCILE_MIN_DISTANCE:
+			# Small prediction/latency differences are reconciled gently. Applying a
+			# large lerp every 20 Hz caused visible movement jitter.
+			global_position += position_error * NETWORK_RECONCILE_BLEND
 		# The local body yaw is driven by local mouse input and submitted to the
 		# server. Applying server yaw again here created a continuous tug-of-war.
 		if not _local_snapshot_rotation_suppressed_logged:
@@ -388,6 +418,7 @@ func receive_network_snapshot(snapshot: Dictionary) -> void:
 		"received_at": Time.get_ticks_msec() / 1000.0,
 		"position": snapshot.get("position", global_position),
 		"rotation_y": snapshot.get("rotation_y", rotation.y),
+		"aim_pitch": snapshot.get("aim_pitch", _network_aim_pitch),
 		"health": snapshot.get("health", health),
 		"mana": snapshot.get("mana", mana),
 		"dead": snapshot.get("dead", dead)
@@ -410,6 +441,8 @@ func _apply_remote_snapshot(_delta: float) -> void:
 	var second_position: Vector3 = second.position
 	global_position = first_position.lerp(second_position, alpha)
 	rotation.y = lerp_angle(float(first.rotation_y), float(second.rotation_y), alpha)
+	_network_aim_pitch = lerpf(float(first.aim_pitch), float(second.aim_pitch), alpha)
+	wand_socket.rotation.x = lerpf(wand_socket.rotation.x, _network_aim_pitch * 0.45, 0.22)
 	health = lerpf(float(first.health), float(second.health), alpha)
 	mana = lerpf(float(first.mana), float(second.mana), alpha)
 	dead = bool(second.dead)
@@ -493,7 +526,9 @@ func _update_movement(delta: float) -> void:
 
 
 func _apply_movement_input(input: Vector2, sprint_pressed: bool, crouch_pressed: bool, focus_pressed: bool, delta: float) -> void:
-	var direction := Vector3(input.x, 0, input.y)
+	# Movement input is raw local WASD axes. Both local prediction and the
+	# dedicated server rotate it by the same authoritative body yaw.
+	var direction := Vector3(input.x, 0, input.y).rotated(Vector3.UP, rotation.y)
 	if exhaustion_remaining > 0.0:
 		direction = Vector3.ZERO
 	is_focused = focus_pressed and not casting
@@ -529,10 +564,7 @@ func _update_aim() -> void:
 		if not _network_aim_initialized:
 			_network_aim_yaw = rotation.y
 			_network_aim_initialized = true
-		var forward := Vector3(-sin(_network_aim_yaw), 0.0, -cos(_network_aim_yaw))
-		aim_point = global_position + forward * 20.0
 		rotation.y = _network_aim_yaw
-		_update_preview()
 		return
 	var mouse: Vector2 = get_viewport().get_mouse_position()
 	var origin: Vector3 = camera.project_ray_origin(mouse)
@@ -564,19 +596,85 @@ func _update_camera(delta: float) -> void:
 
 func _update_network_camera_aim_target() -> void:
 	var viewport := get_viewport()
-	var screen_center := viewport.get_visible_rect().size * 0.5
-	var ray_origin := camera.project_ray_origin(screen_center)
-	var ray_direction := camera.project_ray_normal(screen_center)
-	var target_point := ray_origin + ray_direction * 60.0
-	if absf(ray_direction.y) > 0.001:
-		var ground_distance := -ray_origin.y / ray_direction.y
-		if ground_distance > 0.0:
-			target_point = ray_origin + ray_direction * ground_distance
-	aim_point = target_point
-	# The camera follows the body with smoothing. Feeding this delayed ray back
-	# into body yaw overwrote mouse yaw every frame, so horizontal aim could not
-	# catch up. The ray supplies only the cast target; mouse input owns body yaw.
+	_initialize_virtual_aim_cursor()
+	var viewport_size := viewport.get_visible_rect().size
+	_virtual_aim_position = _virtual_aim_position.clamp(Vector2.ZERO, viewport_size)
+	_network_aim_origin = camera.project_ray_origin(_virtual_aim_position)
+	_network_aim_direction = camera.project_ray_normal(_virtual_aim_position).normalized()
+	aim_point = _raycast_aim_target(_network_aim_origin, _network_aim_direction, free_aim_ray_distance)
 	_update_preview()
+
+
+func _initialize_virtual_aim_cursor() -> void:
+	if _virtual_aim_initialized:
+		return
+	_virtual_aim_position = get_viewport().get_visible_rect().size * 0.5
+	_virtual_aim_initialized = true
+
+
+func _move_virtual_aim_cursor(relative_motion: Vector2) -> void:
+	_initialize_virtual_aim_cursor()
+	var viewport_size := get_viewport().get_visible_rect().size
+	_virtual_aim_position = (_virtual_aim_position + relative_motion).clamp(Vector2.ZERO, viewport_size)
+
+
+func _update_free_aim_turn(delta: float) -> void:
+	_initialize_virtual_aim_cursor()
+	var viewport_size := get_viewport().get_visible_rect().size
+	var center := viewport_size * 0.5
+	var dead_zone_half := viewport_size * free_aim_dead_zone_ratio * 0.5
+	var available := Vector2(maxf(1.0, center.x - dead_zone_half.x), maxf(1.0, center.y - dead_zone_half.y))
+	var offset := _virtual_aim_position - center
+	var turn := Vector2.ZERO
+	if absf(offset.x) > dead_zone_half.x:
+		turn.x = signf(offset.x) * clampf((absf(offset.x) - dead_zone_half.x) / available.x, 0.0, 1.0)
+	if absf(offset.y) > dead_zone_half.y:
+		turn.y = signf(offset.y) * clampf((absf(offset.y) - dead_zone_half.y) / available.y, 0.0, 1.0)
+	var in_turn_zone := not is_zero_approx(turn.x) or not is_zero_approx(turn.y)
+	if in_turn_zone != _free_aim_in_turn_zone:
+		_free_aim_in_turn_zone = in_turn_zone
+		print("[AIM] peer=%d %s turn_zone cursor=%s turn=%s body_yaw=%.3f" % [network_peer_id, "entered" if in_turn_zone else "exited", str(_virtual_aim_position), str(turn), _network_aim_yaw])
+	var yaw_delta := -turn.x * free_aim_body_turn_speed * delta
+	var pitch_delta := -turn.y * free_aim_pitch_turn_speed * delta
+	_network_aim_yaw += yaw_delta
+	_network_aim_pitch = clampf(_network_aim_pitch + pitch_delta, -0.65, 0.65)
+	# Camera/body turning consumes only the part of the cursor outside the dead
+	# zone. It drifts toward centre smoothly and is never warped there.
+	_virtual_aim_position.x -= turn.x * absf(yaw_delta) * free_aim_cursor_recenter_pixels_per_radian
+	_virtual_aim_position.y -= turn.y * absf(pitch_delta) * free_aim_cursor_recenter_pixels_per_radian
+	_virtual_aim_position = _virtual_aim_position.clamp(Vector2.ZERO, viewport_size)
+
+
+func get_virtual_aim_position() -> Vector2:
+	_initialize_virtual_aim_cursor()
+	return _virtual_aim_position
+
+
+func is_virtual_aim_active() -> bool:
+	return is_local_network_player() and not _is_free_aim_ui_blocked()
+
+
+func is_aim_input_blocked() -> bool:
+	return _is_free_aim_ui_blocked()
+
+
+func _raycast_aim_target(ray_origin: Vector3, ray_direction: Vector3, max_distance: float) -> Vector3:
+	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_direction * max_distance, 1 | 4)
+	query.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.position if not hit.is_empty() else ray_origin + ray_direction * max_distance
+
+
+func _server_aim_target(ray_origin: Vector3, ray_direction: Vector3, max_distance: float) -> Vector3:
+	return _raycast_aim_target(ray_origin, ray_direction, max_distance)
+
+
+func _is_free_aim_ui_blocked() -> bool:
+	var root: Node = get_tree().current_scene
+	if root.has_method("is_local_ui_open") and root.is_local_ui_open():
+		return true
+	var raid: Node = _gameplay_area()
+	return raid.has_method("is_aim_ui_open") and raid.is_aim_ui_open()
 
 func begin_cast() -> bool:
 	var config := current_spell_config()

@@ -41,7 +41,7 @@ func _ready() -> void:
 	is_server_mode = "--server" in launch_args
 
 	if is_server_mode:
-		print("[SERVER] boot build=multiplayer-debug-2 args=%s" % str(launch_args))
+		print("[SERVER] boot build=free-aim-rpc-v3 args=%s" % str(launch_args))
 
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
