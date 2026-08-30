@@ -64,6 +64,9 @@ var network_projectiles: Dictionary = {}
 var network_projectile_spawn_data: Dictionary = {}
 var network_snapshot_elapsed := 0.0
 var network_raid_active := false
+## Assigned by Main before the scene enters the tree. All network fan-out for
+## this world is scoped to this session rather than connected peers globally.
+var raid_session_id := ""
 var _next_network_enemy_id := 1
 var _next_network_magic_id := 1
 
@@ -113,9 +116,9 @@ func spawn_network_raid_member(peer_id: int) -> void:
 	var offset_index := network_players.size()
 	var spawn_position := player_spawn.global_position + Vector3(float(offset_index % 3) * 1.25, 0.0, float(offset_index / 3) * 1.25)
 	_create_network_raid_player(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
-	for target_peer: int in NetworkManager.raid_members:
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
 		spawn_network_raid_player.rpc_id(target_peer, peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
-	print("[RAID] Spawned network player peer=%d players=%s" % [peer_id, str(network_players.keys())])
+	print("[PLAYER %s] spawn peer=%d players=%s" % [raid_session_id, peer_id, str(network_players.keys())])
 
 
 func _sync_network_world_to_peer(peer_id: int) -> void:
@@ -155,13 +158,15 @@ func _process_network_raid(delta: float) -> void:
 		var network_player := network_players[peer_id] as PlayerController
 		if is_instance_valid(network_player):
 			states.append({"peer_id": peer_id, "position": network_player.global_position, "rotation_y": network_player.rotation.y, "aim_pitch": network_player._network_aim_pitch, "health": network_player.health, "mana": network_player.mana, "cooldowns": network_player.page_cooldowns.duplicate(), "dead": network_player.dead})
-	receive_network_raid_snapshots.rpc(states)
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
+		receive_network_raid_snapshots.rpc_id(target_peer, states)
 	var enemy_states: Array[Dictionary] = []
 	for enemy_id: String in network_enemies:
 		var enemy := network_enemies[enemy_id] as EnemyController
 		if is_instance_valid(enemy):
 			enemy_states.append({"enemy_id": enemy_id, "position": enemy.global_position, "rotation_y": enemy.rotation.y, "health": enemy.health, "dead": enemy.dead})
-	receive_network_enemy_snapshots.rpc(enemy_states)
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
+		receive_network_enemy_snapshots.rpc_id(target_peer, enemy_states)
 	var projectile_states: Array[Dictionary] = []
 	var expired_magic_ids: Array[String] = []
 	for magic_id: String in network_projectiles:
@@ -174,7 +179,8 @@ func _process_network_raid(delta: float) -> void:
 	for magic_id: String in expired_magic_ids:
 		network_projectiles.erase(magic_id)
 		network_projectile_spawn_data.erase(magic_id)
-	receive_network_projectile_snapshots.rpc(projectile_states)
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
+		receive_network_projectile_snapshots.rpc_id(target_peer, projectile_states)
 
 
 func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> PlayerController:
@@ -274,7 +280,7 @@ func _register_network_projectile(projectile: SpellProjectile, config: RuntimeSp
 	}
 	network_projectile_spawn_data[magic_id] = spawn_data
 	print("[MAGIC] server spawn id=%s caster=%s type=%s position=%s" % [magic_id, caster_label, config.base_spell.spell_id, str(start)])
-	for peer_id: int in NetworkManager.raid_members:
+	for peer_id: int in NetworkManager.get_session_members(raid_session_id):
 		spawn_network_projectile.rpc_id(peer_id, spawn_data)
 
 
@@ -284,7 +290,7 @@ func _on_network_projectile_resolved(magic_id: String, reason: String) -> void:
 	network_projectiles.erase(magic_id)
 	network_projectile_spawn_data.erase(magic_id)
 	print("[PROJECTILE] despawn id=%s reason=%s" % [magic_id, reason])
-	for peer_id: int in NetworkManager.raid_members:
+	for peer_id: int in NetworkManager.get_session_members(raid_session_id):
 		despawn_network_projectile.rpc_id(peer_id, magic_id, reason)
 
 
@@ -293,7 +299,7 @@ func _on_network_raid_peer_disconnected(peer_id: int) -> void:
 	network_players.erase(peer_id)
 	if is_instance_valid(network_player):
 		network_player.queue_free()
-	for target_peer: int in NetworkManager.raid_members:
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
 		remove_network_raid_player.rpc_id(target_peer, peer_id)
 
 
@@ -889,7 +895,7 @@ func _cast_beam(config: RuntimeSpellConfig, start: Vector3, target: Vector3) -> 
 
 func spawn_spell_impact(at: Vector3, color: Color, radius: float, primary_element: String = "neutral", variant_seed: float = 0.0) -> void:
 	if NetworkManager.is_network_game() and multiplayer.is_server():
-		for peer_id: int in NetworkManager.raid_members:
+		for peer_id: int in NetworkManager.get_session_members(raid_session_id):
 			show_network_spell_impact.rpc_id(peer_id, at, color, radius, primary_element, variant_seed)
 		return
 	var impact_root := Node3D.new()
@@ -956,7 +962,7 @@ func show_network_spell_impact(at: Vector3, color: Color, radius: float, primary
 
 func spawn_cast_release(at: Vector3, primary_element: String, color: Color, variant_seed: float = 0.0) -> void:
 	if NetworkManager.is_network_game() and multiplayer.is_server():
-		for peer_id: int in NetworkManager.raid_members:
+		for peer_id: int in NetworkManager.get_session_members(raid_session_id):
 			show_network_cast_release.rpc_id(peer_id, at, primary_element, color, variant_seed)
 		return
 	var release := MeshInstance3D.new()
@@ -997,7 +1003,7 @@ func schedule_spell_echo(config: RuntimeSpellConfig, at: Vector3) -> void:
 
 func spawn_shot_tracer(start: Vector3, end: Vector3, color: Color) -> void:
 	if NetworkManager.is_network_game() and multiplayer.is_server():
-		for peer_id: int in NetworkManager.raid_members:
+		for peer_id: int in NetworkManager.get_session_members(raid_session_id):
 			show_network_shot_tracer.rpc_id(peer_id, start, end, color)
 		return
 	var tracer := MeshInstance3D.new()
@@ -1057,9 +1063,9 @@ func extract_network_player(peer_id: int, extraction_name: String) -> bool:
 		return false
 	network_players.erase(peer_id)
 	network_player.queue_free()
-	for target_peer: int in NetworkManager.raid_members:
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
 		remove_network_raid_player.rpc_id(target_peer, peer_id)
-	print("[RAID] extracted peer=%d via=%s" % [peer_id, extraction_name])
+	print("[RAID %s] extracted peer=%d via=%s" % [raid_session_id, peer_id, extraction_name])
 	return true
 
 

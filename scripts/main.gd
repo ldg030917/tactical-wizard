@@ -17,6 +17,11 @@ enum SessionPhase { MAIN_MENU, SOLO_LOBBY, MULTIPLAYER_LOBBY, LOADING_RAID, IN_R
 @onready var connect_button: Button = %ConnectButton
 @onready var connection_status_label: Label = %ConnectionStatusLabel
 @onready var network_status_label: Label = %NetworkStatusLabel
+@onready var matchmaking_panel: Control = %MatchmakingPanel
+@onready var matchmaking_status_label: Label = %MatchmakingStatusLabel
+@onready var find_match_button: Button = %FindMatchButton
+@onready var cancel_match_button: Button = %CancelMatchButton
+@onready var test_raid_button: Button = %TestRaidButton
 
 var active_area: Node
 var start_screen: StartScreen
@@ -38,16 +43,20 @@ func _ready() -> void:
 		# A headless export has no renderer, and this also keeps normal --server
 		# launches from displaying any game UI.
 		network_panel.visible = false
+		matchmaking_panel.visible = false
 		result_ui.visible = false
 		pause_menu.visible = false
 		network_status_label.visible = false
 		print("Main started in dedicated server mode.")
-		NetworkManager.raid_join_requested.connect(_on_server_raid_join_requested)
-		NetworkManager.raid_client_loaded.connect(_on_server_raid_client_loaded)
+		NetworkManager.raid_session_world_requested.connect(_on_server_raid_session_world_requested)
+		NetworkManager.raid_session_clients_ready.connect(_on_server_raid_session_clients_ready)
 		NetworkManager.raid_extraction_requested.connect(_on_server_raid_extraction_requested)
 		return
 
 	connect_button.pressed.connect(_connect_to_server)
+	find_match_button.pressed.connect(_find_match)
+	cancel_match_button.pressed.connect(_cancel_matchmaking)
+	test_raid_button.pressed.connect(_start_test_raid)
 	# Prototype clients always use NetworkManager.DEFAULT_SERVER_ADDRESS. Keep the
 	# field out of the normal flow so stale UI text can never alter the endpoint.
 	server_address_input.visible = false
@@ -56,6 +65,7 @@ func _ready() -> void:
 	NetworkManager.client_connection_failed.connect(_on_client_connection_failed)
 	NetworkManager.session_state_changed.connect(_on_session_state_changed)
 	NetworkManager.ping_updated.connect(_on_ping_updated)
+	NetworkManager.matchmaking_status_changed.connect(_on_matchmaking_status_changed)
 	NetworkManager.load_raid_requested.connect(_on_client_load_raid_requested)
 	NetworkManager.return_to_lobby_requested.connect(_on_client_return_to_lobby_requested)
 	(result_ui.get_node("%ReturnButton") as Button).pressed.connect(_return_from_result)
@@ -104,6 +114,7 @@ func show_start() -> void:
 	get_tree().paused = false
 	result_ui.visible = false
 	pause_menu.visible = false
+	matchmaking_panel.visible = false
 	_clear_active()
 	if start_screen == null or not is_instance_valid(start_screen):
 		start_screen = start_screen_scene.instantiate() as StartScreen
@@ -121,6 +132,12 @@ func show_base() -> void:
 	get_tree().paused = false
 	result_ui.visible = false
 	pause_menu.visible = false
+	matchmaking_panel.visible = NetworkManager.is_connected_to_server()
+	if NetworkManager.is_connected_to_server():
+		matchmaking_status_label.text = "LOBBY"
+		find_match_button.disabled = false
+		cancel_match_button.disabled = true
+		test_raid_button.disabled = false
 	_clear_active()
 	active_area = base_scene.instantiate()
 	if active_area is BaseScene and NetworkManager.is_connected_to_server():
@@ -137,8 +154,21 @@ func start_raid() -> void:
 	_start_raid_scene()
 
 
-func _start_raid_scene() -> void:
+func _find_match() -> void:
+	NetworkManager.request_matchmaking()
+
+
+func _cancel_matchmaking() -> void:
+	NetworkManager.cancel_matchmaking()
+
+
+func _start_test_raid() -> void:
+	NetworkManager.request_test_raid()
+
+
+func _start_raid_scene(session_id: String = "") -> void:
 	session_phase = SessionPhase.LOADING_RAID
+	matchmaking_panel.visible = false
 	if not GameState.begin_raid():
 		return
 	result_ui.visible = false
@@ -146,33 +176,40 @@ func _start_raid_scene() -> void:
 	var region := ContentRegistry.regions().get(REGION_GRAPH.ENTRY_REGION_ID) as RegionData
 	var selected_scene: PackedScene = region.scene if region != null and region.scene != null else raid_scene
 	active_area = selected_scene.instantiate()
+	if active_area is RaidScene:
+		(active_area as RaidScene).raid_session_id = session_id
 	world_container.add_child(active_area)
 	session_phase = SessionPhase.IN_RAID
 
 
-func _on_server_raid_join_requested(peer_id: int) -> void:
-	# The server owns one persistent Raid world. A peer is added to it only after
-	# that peer explicitly asks to join; connected lobby peers remain untouched.
-	if active_area == null:
-		_start_raid_scene()
-		print("[RAID] Server created raid world")
-	if active_area is RaidScene:
-		NetworkManager.server_begin_raid_join(peer_id)
+func _on_server_raid_session_world_requested(session_id: String) -> void:
+	if active_area == null or not active_area is RaidScene or (active_area as RaidScene).raid_session_id != session_id:
+		_create_local_server_raid_world(session_id)
+	NetworkManager.server_begin_session_loading(session_id)
 
 
-func _on_client_load_raid_requested() -> void:
-	print("[RAID] Client loading raid scene")
-	_start_raid_scene()
-	NetworkManager.client_raid_scene_ready()
+## The current SessionManager allocates one local world slot. Keeping that
+## implementation here means a later external raid-server allocator changes the
+## SessionManager boundary rather than gameplay systems or client transitions.
+func _create_local_server_raid_world(session_id: String) -> void:
+	_start_raid_scene(session_id)
+	print("[RAID %s] Server created local raid world" % session_id)
 
 
-func _on_server_raid_client_loaded(peer_id: int) -> void:
-	if active_area is RaidScene:
-		(active_area as RaidScene).spawn_network_raid_member(peer_id)
+func _on_client_load_raid_requested(session_id: String) -> void:
+	print("[RAID %s] Client loading raid scene" % session_id)
+	_start_raid_scene(session_id)
+	NetworkManager.client_raid_scene_ready(session_id)
 
 
-func _on_server_raid_extraction_requested(peer_id: int, extraction_name: String) -> void:
-	if active_area is RaidScene:
+func _on_server_raid_session_clients_ready(session_id: String, members: Array[int]) -> void:
+	if active_area is RaidScene and (active_area as RaidScene).raid_session_id == session_id:
+		for peer_id: int in members:
+			(active_area as RaidScene).spawn_network_raid_member(peer_id)
+
+
+func _on_server_raid_extraction_requested(peer_id: int, extraction_name: String, session_id: String) -> void:
+	if active_area is RaidScene and (active_area as RaidScene).raid_session_id == session_id:
 		if (active_area as RaidScene).extract_network_player(peer_id, extraction_name):
 			NetworkManager.server_complete_raid_extraction(peer_id)
 
@@ -180,6 +217,15 @@ func _on_server_raid_extraction_requested(peer_id: int, extraction_name: String)
 func _on_client_return_to_lobby_requested() -> void:
 	print("[LOBBY] Returning multiplayer peer=%d" % multiplayer.get_unique_id())
 	show_base()
+
+
+func _on_matchmaking_status_changed(message: String) -> void:
+	network_status_label.text = "ONLINE\n%s\nPeer: %d" % [message, multiplayer.get_unique_id()]
+	matchmaking_status_label.text = message
+	var is_queuing := message.begins_with("MATCHMAKING")
+	find_match_button.disabled = is_queuing or message.begins_with("MATCH FOUND")
+	cancel_match_button.disabled = not is_queuing
+	test_raid_button.disabled = is_queuing or message.begins_with("MATCH FOUND")
 
 func travel_to_region(region_id: String) -> bool:
 	if not active_area is RaidScene:

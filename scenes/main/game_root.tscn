@@ -93,3 +93,46 @@ offset_right = 1250.0
 offset_bottom = 90.0
 text = "OFFLINE"
 horizontal_alignment = 2
+
+[node name="MatchmakingPanel" type="PanelContainer" parent="NetworkUI" unique_id=402001]
+unique_name_in_owner = true
+offset_left = 28.0
+offset_top = 204.0
+offset_right = 398.0
+offset_bottom = 386.0
+
+[node name="Margin" type="MarginContainer" parent="NetworkUI/MatchmakingPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="Layout" type="VBoxContainer" parent="NetworkUI/MatchmakingPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="NetworkUI/MatchmakingPanel/Margin/Layout"]
+layout_mode = 2
+text = "RAID MATCHMAKING"
+
+[node name="MatchmakingStatusLabel" type="Label" parent="NetworkUI/MatchmakingPanel/Margin/Layout" unique_id=402002]
+unique_name_in_owner = true
+layout_mode = 2
+text = "LOBBY"
+
+[node name="FindMatchButton" type="Button" parent="NetworkUI/MatchmakingPanel/Margin/Layout" unique_id=402003]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Find Match (2-4 Players)"
+
+[node name="CancelMatchButton" type="Button" parent="NetworkUI/MatchmakingPanel/Margin/Layout" unique_id=402004]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cancel Matchmaking"
+disabled = true
+
+[node name="TestRaidButton" type="Button" parent="NetworkUI/MatchmakingPanel/Margin/Layout" unique_id=402005]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Start Test Raid (Solo)"
