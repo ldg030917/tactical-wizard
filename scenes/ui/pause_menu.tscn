@@ -26,12 +26,12 @@ offset_right = 170.0
 offset_bottom = 125.0
 [node name="Layout" type="VBoxContainer" parent="Panel"]
 [node name="Title" type="Label" parent="Panel/Layout"]
-text = "PAUSED"
+text = "일시정지"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 30
 [node name="ResumeButton" type="Button" parent="Panel/Layout"]
 unique_name_in_owner = true
-text = "Resume"
+text = "계속하기"
 [node name="ReturnButton" type="Button" parent="Panel/Layout"]
 unique_name_in_owner = true
-text = "Abandon Raid / Return to Base"
+text = "원정 포기 / 기지 귀환"

@@ -26,4 +26,4 @@ func _process(_delta: float) -> void:
 		visual.rotation_degrees.y = facing_direction_degrees
 	if label != null:
 		label.visible = show_debug_visual
-		label.text = "PLAYER SPAWN\n%s (%s)" % [spawn_id, spawn_role]
+		label.text = "플레이어 시작 지점\n%s (%s)" % [spawn_id, spawn_role]

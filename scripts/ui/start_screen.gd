@@ -8,11 +8,11 @@ signal start_requested
 
 func _ready() -> void:
 	%StartButton.icon = UIIconFactory.navigation_icon("start", 96)
-	%StartButton.tooltip_text = "Start Game"
+	%StartButton.tooltip_text = "게임 시작"
 	%SettingsButton.icon = UIIconFactory.navigation_icon("settings", 96)
-	%SettingsButton.tooltip_text = "Settings"
+	%SettingsButton.tooltip_text = "설정"
 	%QuitButton.icon = UIIconFactory.navigation_icon("exit", 96)
-	%QuitButton.tooltip_text = "Quit Game"
+	%QuitButton.tooltip_text = "게임 종료"
 	for button: Button in [%StartButton, %SettingsButton, %QuitButton]:
 		button.expand_icon = true
 	%StartButton.pressed.connect(func() -> void: start_requested.emit())

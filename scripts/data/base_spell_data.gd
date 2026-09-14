@@ -3,8 +3,8 @@ extends Resource
 
 @export_category("Spell Identity")
 @export var spell_id: String = "spell"
-@export var display_name: String = "Unnamed Spell"
-@export_multiline var description: String = "Prepared arcane formula."
+@export var display_name: String = "이름 없는 주문"
+@export_multiline var description: String = "준비된 비전 주문식입니다."
 @export_enum("fire", "water", "grass", "neutral") var primary_element: String = "neutral"
 @export var spell_family: String = "arcane"
 @export_enum("projectile", "area", "self", "melee") var spell_form: String = "projectile"
@@ -40,4 +40,6 @@ var element: String:
 @export var debug_color: Color = Color("8fd7ff")
 
 func family_label() -> String:
-	return "%s-derived %s" % [primary_element.capitalize(), spell_family.capitalize()] if spell_family != primary_element else primary_element.capitalize()
+	var element_name := KoreanLocalization.element(primary_element)
+	var family_name := KoreanLocalization.family(spell_family)
+	return "%s 파생 %s" % [element_name, family_name] if spell_family != primary_element else element_name

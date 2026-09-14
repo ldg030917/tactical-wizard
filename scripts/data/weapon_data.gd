@@ -3,9 +3,9 @@ extends Resource
 
 @export_category("Identity")
 @export var item_id: String = ""
-@export var display_name: String = "Weapon"
+@export var display_name: String = "무기"
 @export_enum("pistol", "automatic", "shotgun", "melee") var category: String = "pistol"
-@export_multiline var description: String = "Replaceable weapon configuration."
+@export_multiline var description: String = "교체 가능한 무기 구성입니다."
 
 @export_category("Ballistics")
 @export_range(0.0, 200.0, 0.5) var damage: float = 20.0

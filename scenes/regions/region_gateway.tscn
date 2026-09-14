@@ -28,7 +28,7 @@ mesh = SubResource("2")
 [node name="GatewayLabel" type="Label3D" parent="."]
 unique_name_in_owner = true
 position = Vector3(0, 2.75, 0)
-text = "ELEMENTAL WAYGATE"
+text = "원소 관문"
 font_size = 28
 outline_size = 8
 billboard = 1

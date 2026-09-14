@@ -29,7 +29,7 @@ func _process(_delta: float) -> void:
 		visual.visible = show_debug_visual
 	if label != null:
 		label.visible = show_debug_visual
-		label.text = "LOOT SPAWN\n%s" % spawn_id
+		label.text = "전리품 생성 지점\n%s" % spawn_id
 
 func spawn_loot(parent: Node3D, rng: RandomNumberGenerator) -> LootContainer:
 	if container_scene == null or rng.randf() > activation_chance:
@@ -38,7 +38,7 @@ func spawn_loot(parent: Node3D, rng: RandomNumberGenerator) -> LootContainer:
 	if container == null:
 		return null
 	container.container_id = spawn_id
-	container.container_name = "Loose Field Cache" if loose_loot_mode else "Randomized Field Container"
+	container.container_name = "노출된 현장 보급품" if loose_loot_mode else "무작위 현장 상자"
 	container.loot_table = loot_table
 	container.activation_chance = 1.0
 	container.minimum_items = minimum_item_count

@@ -1,6 +1,7 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+/builds/
 
 .import/
 
@@ -9,6 +10,7 @@ export_presets.cfg
 
 *.tmp
 *.translation
+/tests/*_run.log
 
 # OS
 .DS_Store

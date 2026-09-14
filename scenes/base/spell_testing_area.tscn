@@ -1,6 +1,84 @@
-[gd_scene load_steps=2 format=3]
-[ext_resource path="res://scenes/base/station_base.tscn" type="PackedScene" id="1"]
-[node name="SpellTestingArea" instance=ExtResource("1")]
+[gd_scene load_steps=11 format=3]
+[ext_resource path="res://scripts/base_station.gd" type="Script" id="1"]
+[sub_resource type="StandardMaterial3D" id="RobeMat"]
+albedo_color = Color(0.24, 0.12, 0.38, 1)
+[sub_resource type="StandardMaterial3D" id="SkinMat"]
+albedo_color = Color(0.7, 0.52, 0.39, 1)
+[sub_resource type="StandardMaterial3D" id="HatMat"]
+albedo_color = Color(0.12, 0.05, 0.22, 1)
+[sub_resource type="CapsuleMesh" id="BodyMesh"]
+material = SubResource("RobeMat")
+radius = 0.36
+height = 1.3
+[sub_resource type="SphereMesh" id="HeadMesh"]
+material = SubResource("SkinMat")
+radius = 0.29
+height = 0.58
+[sub_resource type="CylinderMesh" id="HatCone"]
+material = SubResource("HatMat")
+top_radius = 0.0
+bottom_radius = 0.47
+height = 0.9
+[sub_resource type="CylinderMesh" id="HatBrim"]
+material = SubResource("HatMat")
+top_radius = 0.62
+bottom_radius = 0.62
+height = 0.08
+[sub_resource type="CylinderMesh" id="StaffMesh"]
+material = SubResource("HatMat")
+top_radius = 0.045
+bottom_radius = 0.055
+height = 1.65
+[sub_resource type="BoxShape3D" id="NPCShape"]
+size = Vector3(1.0, 2.0, 0.9)
+
+[node name="SpellTestingArea" type="Node3D"]
+script = ExtResource("1")
 station_id = "character"
-display_name = "Specialization Mentor"
-interaction_description = "Review vocations with"
+display_name = "특화 교관"
+interaction_description = "특화 확인:"
+[node name="Collision" type="StaticBody3D" parent="."]
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Collision"]
+position = Vector3(0, 1, 0)
+shape = SubResource("NPCShape")
+[node name="InteractionArea" type="Area3D" parent="."]
+collision_layer = 16
+collision_mask = 2
+[node name="CollisionShape3D" type="CollisionShape3D" parent="InteractionArea"]
+position = Vector3(0, 1, 0)
+shape = SubResource("NPCShape")
+[node name="Visual" type="Node3D" parent="."]
+[node name="Mentor" type="Node3D" parent="Visual"]
+[node name="Robe" type="MeshInstance3D" parent="Visual/Mentor"]
+position = Vector3(0, 0.7, 0)
+mesh = SubResource("BodyMesh")
+[node name="Head" type="MeshInstance3D" parent="Visual/Mentor"]
+position = Vector3(0, 1.48, 0)
+mesh = SubResource("HeadMesh")
+[node name="HatBrim" type="MeshInstance3D" parent="Visual/Mentor"]
+position = Vector3(0, 1.77, 0)
+mesh = SubResource("HatBrim")
+[node name="PointedHat" type="MeshInstance3D" parent="Visual/Mentor"]
+position = Vector3(0.08, 2.16, 0)
+rotation_degrees = Vector3(0, 0, -10)
+mesh = SubResource("HatCone")
+[node name="Staff" type="MeshInstance3D" parent="Visual/Mentor"]
+position = Vector3(0.52, 0.87, 0)
+rotation_degrees = Vector3(0, 0, -5)
+mesh = SubResource("StaffMesh")
+[node name="LevelTwoModule" type="Node3D" parent="Visual"]
+unique_name_in_owner = true
+visible = false
+[node name="LevelThreeModule" type="Node3D" parent="Visual"]
+unique_name_in_owner = true
+visible = false
+[node name="StationLabel" type="Label3D" parent="."]
+unique_name_in_owner = true
+position = Vector3(0, 2.85, 0)
+font_size = 54
+outline_size = 12
+pixel_size = 0.0015
+billboard = 1
+no_depth_test = true
+text = "특화 교관"

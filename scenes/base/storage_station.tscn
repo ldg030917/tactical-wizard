@@ -3,6 +3,7 @@
 [ext_resource path="res://resources/upgrades/storage.tres" type="Resource" id="2"]
 [node name="StorageStation" instance=ExtResource("1")]
 station_id = "stash"
-display_name = "Persistent Stash"
-interaction_description = "Open"
+display_name = "영구 보관함"
+interaction_description = "열기:"
 linked_upgrade = ExtResource("2")
+visual_kind = "storage"

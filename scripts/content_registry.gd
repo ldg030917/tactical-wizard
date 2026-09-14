@@ -23,6 +23,7 @@ static func recipes() -> Dictionary:
 		for resource: Resource in _manifest_resources("crafting_recipes"):
 			var recipe := resource as CraftingRecipeData
 			if recipe != null:
+				KoreanLocalization.localize_recipe(recipe)
 				_recipes[recipe.recipe_id] = recipe
 	return _recipes
 
@@ -31,6 +32,7 @@ static func quests() -> Array[QuestData]:
 		for resource: Resource in _manifest_resources("quests"):
 			var quest := resource as QuestData
 			if quest != null:
+				KoreanLocalization.localize_quest(quest)
 				_quests.append(quest)
 		_quests.sort_custom(func(a: QuestData, b: QuestData) -> bool: return a.sort_order < b.sort_order)
 	return _quests
@@ -40,6 +42,7 @@ static func upgrades() -> Dictionary:
 		for resource: Resource in _manifest_resources("base_upgrades"):
 			var upgrade := resource as BaseUpgradeData
 			if upgrade != null:
+				KoreanLocalization.localize_named(upgrade, "upgrade_id")
 				_upgrades[upgrade.upgrade_id] = upgrade
 	return _upgrades
 
@@ -48,6 +51,7 @@ static func skills() -> Dictionary:
 		for resource: Resource in _manifest_resources("skills"):
 			var skill := resource as SkillData
 			if skill != null:
+				KoreanLocalization.localize_named(skill, "skill_id")
 				_skills[skill.skill_id] = skill
 	return _skills
 
@@ -56,10 +60,12 @@ static func spells() -> Dictionary:
 		for resource: Resource in _manifest_resources("base_spells"):
 			var spell := resource as BaseSpellData
 			if spell != null:
+				KoreanLocalization.localize_spell(spell)
 				_spells[spell.spell_id] = spell
 		for resource: Resource in EXPANDED_CATALOG.spells:
 			var expanded_spell := resource as BaseSpellData
 			if expanded_spell != null:
+				KoreanLocalization.localize_spell(expanded_spell)
 				_spells[expanded_spell.spell_id] = expanded_spell
 	return _spells
 
@@ -68,10 +74,12 @@ static func modifiers() -> Dictionary:
 		for resource: Resource in _manifest_resources("spell_modifiers"):
 			var modifier := resource as SpellModifierData
 			if modifier != null:
+				KoreanLocalization.localize_modifier(modifier)
 				_modifiers[modifier.modifier_id] = modifier
 		for resource: Resource in EXPANDED_CATALOG.modifiers:
 			var expanded_modifier := resource as SpellModifierData
 			if expanded_modifier != null:
+				KoreanLocalization.localize_modifier(expanded_modifier)
 				_modifiers[expanded_modifier.modifier_id] = expanded_modifier
 	return _modifiers
 
@@ -80,6 +88,7 @@ static func spellbooks() -> Dictionary:
 		for resource: Resource in _manifest_resources("spellbooks"):
 			var book := resource as SpellbookData
 			if book != null:
+				KoreanLocalization.localize_spellbook(book)
 				_spellbooks[book.spellbook_id] = book
 	return _spellbooks
 
@@ -88,6 +97,7 @@ static func foci() -> Dictionary:
 		for resource: Resource in _manifest_resources("foci"):
 			var focus := resource as FocusData
 			if focus != null:
+				KoreanLocalization.localize_focus(focus)
 				_foci[focus.focus_id] = focus
 	return _foci
 
@@ -96,6 +106,7 @@ static func starter_packages() -> Dictionary:
 		for resource: Resource in _manifest_resources("starter_packages"):
 			var package := resource as StarterPackageData
 			if package != null:
+				KoreanLocalization.localize_package(package)
 				_starter_packages[package.package_id] = package
 	return _starter_packages
 
@@ -104,6 +115,7 @@ static func characters() -> Dictionary:
 		for resource: Resource in _manifest_resources("characters"):
 			var character := resource as CharacterData
 			if character != null:
+				KoreanLocalization.localize_named(character, "character_id")
 				_characters[character.character_id] = character
 	return _characters
 
@@ -112,6 +124,7 @@ static func regions() -> Dictionary:
 		for resource: Resource in _manifest_resources("regions"):
 			var region := resource as RegionData
 			if region != null:
+				KoreanLocalization.localize_named(region, "region_id")
 				_regions[region.region_id] = region
 	return _regions
 
@@ -120,6 +133,7 @@ static func daggers() -> Dictionary:
 		for resource: Resource in _manifest_resources("daggers"):
 			var dagger := resource as DaggerData
 			if dagger != null:
+				KoreanLocalization.localize_dagger(dagger)
 				_daggers[dagger.dagger_id] = dagger
 	return _daggers
 

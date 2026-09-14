@@ -61,14 +61,17 @@ static func _ensure_loaded() -> void:
 	for resource: Resource in catalog_items:
 		var item := resource as ItemData
 		if item != null and not item.item_id.is_empty():
+			KoreanLocalization.localize_item(item)
 			_items[item.item_id] = item
 	for resource: Resource in EXPANDED_CATALOG.items:
 		var expanded_item := resource as ItemData
 		if expanded_item != null and not expanded_item.item_id.is_empty():
+			KoreanLocalization.localize_item(expanded_item)
 			_items[expanded_item.item_id] = expanded_item
 	for file_name: String in DirAccess.get_files_at("res://resources/items"):
 		if file_name.get_extension() != "tres":
 			continue
 		var supplemental := load("res://resources/items".path_join(file_name)) as ItemData
 		if supplemental != null and not supplemental.item_id.is_empty():
+			KoreanLocalization.localize_item(supplemental)
 			_items[supplemental.item_id] = supplemental

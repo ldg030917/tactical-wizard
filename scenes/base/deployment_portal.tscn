@@ -1,7 +1,121 @@
-[gd_scene load_steps=2 format=3]
-[ext_resource path="res://scenes/base/station_base.tscn" type="PackedScene" id="1"]
-[node name="AshenVillagePortal" instance=ExtResource("1")]
+[gd_scene load_steps=13 format=3]
+
+[ext_resource path="res://scripts/base_station.gd" type="Script" id="1"]
+[ext_resource path="res://scripts/portal_visual.gd" type="Script" id="2"]
+[sub_resource type="StandardMaterial3D" id="StoneMat"]
+albedo_color = Color(0.16, 0.18, 0.22, 1)
+roughness = 0.78
+[sub_resource type="StandardMaterial3D" id="RuneMat"]
+albedo_color = Color(0.32, 0.08, 0.04, 1)
+emission_enabled = true
+emission = Color(1, 0.22, 0.05, 1)
+emission_energy_multiplier = 5.0
+[sub_resource type="StandardMaterial3D" id="PortalMat"]
+transparency = 1
+albedo_color = Color(0.8, 0.12, 0.04, 0.48)
+emission_enabled = true
+emission = Color(1, 0.12, 0.02, 1)
+emission_energy_multiplier = 3.6
+shading_mode = 0
+cull_mode = 2
+[sub_resource type="TorusMesh" id="OuterRing"]
+material = SubResource("StoneMat")
+inner_radius = 1.62
+outer_radius = 2.05
+rings = 40
+ring_segments = 14
+[sub_resource type="TorusMesh" id="RuneRing"]
+material = SubResource("RuneMat")
+inner_radius = 1.38
+outer_radius = 1.52
+rings = 40
+ring_segments = 10
+[sub_resource type="SphereMesh" id="PortalSurface"]
+material = SubResource("PortalMat")
+radius = 1.42
+height = 2.84
+radial_segments = 48
+rings = 24
+[sub_resource type="BoxMesh" id="PillarMesh"]
+material = SubResource("StoneMat")
+size = Vector3(0.62, 3.6, 0.7)
+[sub_resource type="CylinderMesh" id="BaseMesh"]
+material = SubResource("StoneMat")
+top_radius = 2.5
+bottom_radius = 2.8
+height = 0.35
+[sub_resource type="BoxMesh" id="RuneMesh"]
+material = SubResource("RuneMat")
+size = Vector3(0.22, 0.55, 0.08)
+[sub_resource type="BoxShape3D" id="PillarShape"]
+size = Vector3(5.2, 3.8, 0.9)
+[sub_resource type="BoxShape3D" id="InteractShape"]
+size = Vector3(4.8, 3.8, 3.0)
+
+[node name="AshenVillagePortal" type="Node3D"]
+script = ExtResource("1")
 station_id = "deploy"
-display_name = "Ashen Village Deployment Portal"
-interaction_description = "Enter expedition through"
+display_name = "잿빛 마을 출정문"
+interaction_description = "원정 입장:"
 level = 3
+[node name="Collision" type="StaticBody3D" parent="."]
+collision_layer = 1
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Collision"]
+position = Vector3(0, 1.9, 0)
+shape = SubResource("PillarShape")
+[node name="InteractionArea" type="Area3D" parent="."]
+collision_layer = 16
+collision_mask = 2
+[node name="CollisionShape3D" type="CollisionShape3D" parent="InteractionArea"]
+position = Vector3(0, 1.8, -0.7)
+shape = SubResource("InteractShape")
+[node name="Visual" type="Node3D" parent="."]
+script = ExtResource("2")
+[node name="PortalBase" type="MeshInstance3D" parent="Visual"]
+position = Vector3(0, 0.15, 0)
+mesh = SubResource("BaseMesh")
+[node name="LeftPillar" type="MeshInstance3D" parent="Visual"]
+position = Vector3(-2.05, 1.8, 0)
+mesh = SubResource("PillarMesh")
+[node name="RightPillar" type="MeshInstance3D" parent="Visual"]
+position = Vector3(2.05, 1.8, 0)
+mesh = SubResource("PillarMesh")
+[node name="OuterArch" type="MeshInstance3D" parent="Visual"]
+position = Vector3(0, 2.15, 0)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("OuterRing")
+[node name="RuneArch" type="MeshInstance3D" parent="Visual"]
+position = Vector3(0, 2.15, -0.06)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("RuneRing")
+[node name="PortalSurface" type="MeshInstance3D" parent="Visual"]
+position = Vector3(0, 2.15, 0.08)
+scale = Vector3(1, 1, 0.09)
+mesh = SubResource("PortalSurface")
+[node name="LeftRune" type="MeshInstance3D" parent="Visual"]
+position = Vector3(-2.06, 2.1, -0.38)
+rotation_degrees = Vector3(0, 0, 18)
+mesh = SubResource("RuneMesh")
+[node name="RightRune" type="MeshInstance3D" parent="Visual"]
+position = Vector3(2.06, 2.1, -0.38)
+rotation_degrees = Vector3(0, 0, -18)
+mesh = SubResource("RuneMesh")
+[node name="PortalLight" type="OmniLight3D" parent="Visual"]
+position = Vector3(0, 2.1, -0.5)
+light_color = Color(1, 0.24, 0.08, 1)
+light_energy = 5.0
+omni_range = 7.0
+[node name="LevelTwoModule" type="Node3D" parent="Visual"]
+unique_name_in_owner = true
+[node name="LevelThreeModule" type="Node3D" parent="Visual"]
+unique_name_in_owner = true
+[node name="StationLabel" type="Label3D" parent="."]
+unique_name_in_owner = true
+position = Vector3(0, 4.72, 0)
+modulate = Color(1, 0.7, 0.44, 1)
+font_size = 56
+outline_size = 12
+pixel_size = 0.0015
+billboard = 1
+no_depth_test = true
+text = "잿빛 마을 출정문"

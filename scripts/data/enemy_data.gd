@@ -3,7 +3,7 @@ extends Resource
 
 @export_category("Identity")
 @export var enemy_id: String = "monster"
-@export var display_name: String = "Arcane Creature"
+@export var display_name: String = "비전 생물"
 @export_enum("monster", "mage", "construct", "boss", "scavenger", "creature", "guard") var behavior_type: String = "monster"
 @export_enum("fire", "water", "grass", "neutral") var primary_element: String = "neutral"
 @export_range(1, 5, 1) var difficulty_tier: int = 1

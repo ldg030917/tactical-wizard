@@ -3,7 +3,7 @@ extends Resource
 
 @export_category("Recipe")
 @export var recipe_id: String = "recipe"
-@export var display_name: String = "Craft Item"
+@export var display_name: String = "아이템 제작"
 @export_multiline var description: String = ""
 @export var ingredients: Array[CraftIngredientData] = []
 @export var output_item: ItemData

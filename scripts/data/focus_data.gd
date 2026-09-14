@@ -3,8 +3,8 @@ extends Resource
 
 @export_category("Focus Identity")
 @export var focus_id: String = "focus"
-@export var display_name: String = "Apprentice Wand"
-@export_multiline var description: String = "A simple catalyst for prepared spells."
+@export var display_name: String = "수습생 지팡이"
+@export_multiline var description: String = "준비한 주문을 위한 단순한 촉매입니다."
 
 @export_category("Casting Bonuses")
 @export_range(0.5, 2.0, 0.01) var damage_multiplier: float = 1.0

@@ -269,43 +269,43 @@ unique_name_in_owner = true
 [node name="MagicalCrate_01" parent="LootContainers" instance=ExtResource("3")]
 position = Vector3(-10, 0, -9)
 container_id = "charred_hall_magical_crate_01"
-container_name = "Basic Magical Crate"
+container_name = "기본 마법 상자"
 loot_table = ExtResource("18")
 activation_chance = 1.0
 [node name="PotionCabinet_01" parent="LootContainers" instance=ExtResource("3")]
 position = Vector3(-15, 0, -12)
 container_id = "charred_hall_potion_cabinet_01"
-container_name = "Abandoned Potion Cabinet"
+container_name = "버려진 물약장"
 loot_table = ExtResource("19")
 activation_chance = 0.9
 [node name="SpellComponentChest_01" parent="LootContainers" instance=ExtResource("3")]
 position = Vector3(11, 0, -6)
 container_id = "apothecary_component_chest_01"
-container_name = "Spell-Component Chest"
+container_name = "주문 재료 상자"
 loot_table = ExtResource("28")
 activation_chance = 0.85
 [node name="SpellComponentChest_02" parent="LootContainers" instance=ExtResource("3")]
 position = Vector3(15, 0, -10)
 container_id = "apothecary_component_chest_02"
-container_name = "Sealed Formula Chest"
+container_name = "봉인된 주문식 상자"
 loot_table = ExtResource("21")
 activation_chance = 0.8
 [node name="VillageMagicalCrate_02" parent="LootContainers" instance=ExtResource("3")]
 position = Vector3(-19, 0, 7)
 container_id = "west_lane_magical_crate_02"
-container_name = "Scorched Magical Crate"
+container_name = "그을린 마법 상자"
 loot_table = ExtResource("20")
 activation_chance = 0.84
 [node name="VillageMagicalCrate_03" parent="LootContainers" instance=ExtResource("3")]
 position = Vector3(6, 0, 7)
 container_id = "central_square_magical_crate_03"
-container_name = "Collapsed Shrine Crate"
+container_name = "무너진 성소 상자"
 loot_table = ExtResource("18")
 activation_chance = 0.82
 [node name="HighValueArcaneCase_EmberSanctum" parent="LootContainers" instance=ExtResource("3")]
 position = Vector3(14, 0, 13)
 container_id = "ember_sanctum_arcane_case"
-container_name = "High-Value Arcane Case"
+container_name = "고가치 비전 상자"
 loot_table = ExtResource("22")
 activation_chance = 1.0
 starts_locked = false
@@ -316,7 +316,7 @@ maximum_items = 5
 [node name="Extraction_AshenWaygate" parent="ExtractionZones" instance=ExtResource("13")]
 position = Vector3(-21, 0, -21)
 extraction_id = "ashen_waygate"
-extraction_name = "Ashen Waygate"
+extraction_name = "잿빛 관문"
 always_available = true
 countdown_duration = 6.0
 [node name="QuestLocations" type="Node3D" parent="."]
@@ -328,7 +328,7 @@ modulate = Color(0.86, 0.45, 0.92, 1)
 font_size = 26
 billboard = 1
 no_depth_test = true
-text = "QUEST LOCATION\nEmber Sanctum"
+text = "의뢰 장소\n잿불 성소"
 
 [node name="CameraSetup" type="Node3D" parent="."]
 [node name="EditorOverviewCamera" type="Camera3D" parent="CameraSetup"]

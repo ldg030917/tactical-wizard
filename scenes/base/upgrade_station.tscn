@@ -3,6 +3,7 @@
 [ext_resource path="res://resources/upgrades/storage.tres" type="Resource" id="2"]
 [node name="UpgradeStation" instance=ExtResource("1")]
 station_id = "upgrades"
-display_name = "Refuge Upgrade Plinth"
-interaction_description = "Improve the refuge at"
+display_name = "피난처 강화대"
+interaction_description = "강화:"
 linked_upgrade = ExtResource("2")
+visual_kind = "upgrade"

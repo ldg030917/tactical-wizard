@@ -3,11 +3,11 @@
 [node name="Layout" type="VBoxContainer" parent="."]
 [node name="Title" type="Label" parent="Layout"]
 unique_name_in_owner = true
-text = "ARCANE WORKBENCH"
+text = "비전 작업대"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 26
 [node name="Description" type="Label" parent="Layout"]
-text = "Choose an inscription on the left; its output and required materials remain visible on the right."
+text = "왼쪽에서 제작식을 선택하면 결과물과 필요 재료를 오른쪽에서 확인할 수 있습니다."
 autowrap_mode = 2
 [node name="Body" type="HSplitContainer" parent="Layout"]
 size_flags_vertical = 3
@@ -16,7 +16,7 @@ split_offset = 410
 custom_minimum_size = Vector2(400, 0)
 [node name="ChoicesLayout" type="VBoxContainer" parent="Layout/Body/ChoicesPanel"]
 [node name="ChoicesTitle" type="Label" parent="Layout/Body/ChoicesPanel/ChoicesLayout"]
-text = "AVAILABLE INSCRIPTIONS"
+text = "제작식 목록"
 horizontal_alignment = 1
 [node name="Scroll" type="ScrollContainer" parent="Layout/Body/ChoicesPanel/ChoicesLayout"]
 size_flags_vertical = 3

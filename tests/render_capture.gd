@@ -9,12 +9,30 @@ func _ready() -> void:
 	for _i: int in range(12):
 		await get_tree().process_frame
 	_capture("res://tests/start_capture.png")
+	main.start_screen._show_settings()
+	for _i: int in range(8):
+		await get_tree().process_frame
+	_capture("res://tests/settings_capture.png")
+	main.start_screen._hide_settings()
 	main.start_game()
 	for _i: int in range(24):
 		await get_tree().process_frame
 	_capture("res://tests/base_world_capture.png")
+	var base_area := main.active_area as BaseScene
+	base_area.player.global_position = Vector3(8.0, 0.0, 7.0)
+	for _i: int in range(18):
+		await get_tree().process_frame
+	_capture("res://tests/base_portal_capture.png")
+	base_area.player.global_position = Vector3(9.0, 0.0, 2.0)
+	for _i: int in range(18):
+		await get_tree().process_frame
+	_capture("res://tests/base_mentor_capture.png")
 	var base_ui := main.active_area.get_node_or_null("BaseUI") as BaseUI
 	if base_ui != null:
+		base_ui.show_station("settings", "설정")
+		for _i: int in range(8):
+			await get_tree().process_frame
+		_capture("res://tests/base_settings_capture.png")
 		base_ui.show_station("stash", "Persistent Stash")
 		for _i: int in range(12):
 			await get_tree().process_frame

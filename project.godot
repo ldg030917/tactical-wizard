@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="Ashen Grimoire"
+config/name="Tactical Wizard"
 run/main_scene="res://scenes/main/game_root.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
@@ -27,6 +27,10 @@ window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+
+[gui]
+
+theme/custom="res://resources/korean_theme.tres"
 
 [layer_names]
 

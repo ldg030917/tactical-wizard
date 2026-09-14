@@ -3,7 +3,7 @@ extends Resource
 
 @export_category("Loot Table")
 @export var table_id: String = "loot_table"
-@export var display_name: String = "Loot Table"
+@export var display_name: String = "전리품 목록"
 @export var minimum_rolls: int = 1
 @export var maximum_rolls: int = 3
 @export var entries: Array[LootEntryData] = []

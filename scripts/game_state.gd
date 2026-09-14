@@ -426,27 +426,27 @@ func install_page_spell(page_index: int, spell_item_id: String) -> bool:
 
 func install_page_modifier(page_index: int, modifier_item_id: String) -> Dictionary:
 	if in_raid:
-		return {"success":false, "message":"Full spell attachment rebuilding is only available at the Base."}
+		return {"success":false, "message":"부착 룬 전체 재구성은 기지에서만 가능합니다."}
 	if page_index < 0 or page_index >= spell_pages.size():
-		return {"success":false, "message":"Invalid spell page."}
+		return {"success":false, "message":"잘못된 주문 페이지입니다."}
 	var spell: BaseSpellData = ItemDB.spell(str(spell_pages[page_index].get("spell_item", "")))
 	var modifier: SpellModifierData = ItemDB.modifier(modifier_item_id)
 	if modifier == null:
-		return {"success":false, "message":"That item is not a spell modifier."}
+		return {"success":false, "message":"부착 룬이 아닌 아이템입니다."}
 	if not modifier.is_compatible(spell):
 		return {"success":false, "message":modifier.incompatibility_reason(spell)}
 	var book: SpellbookData = equipped_spellbook()
 	var installed: Array = spell_pages[page_index].get("modifiers", [])
 	if book == null or installed.size() >= book.maximum_modifiers_per_page:
-		return {"success":false, "message":"This page has no remaining modifier sockets."}
+		return {"success":false, "message":"이 페이지에는 빈 룬 슬롯이 없습니다."}
 	if modifier_item_id in installed:
-		return {"success":false, "message":"That modifier is already installed."}
+		return {"success":false, "message":"이미 장착한 룬입니다."}
 	if not remove_from_stash(modifier_item_id, 1):
-		return {"success":false, "message":"The modifier is not in the stash."}
+		return {"success":false, "message":"해당 룬이 보관함에 없습니다."}
 	installed.append(modifier_item_id)
 	spell_pages[page_index].modifiers = installed
 	_save_spellbook_change()
-	return {"success":true, "message":"Installed %s." % modifier.display_name}
+	return {"success":true, "message":"%s 장착 완료." % modifier.display_name}
 
 func remove_page_modifier(page_index: int, modifier_index: int) -> bool:
 	if in_raid:
@@ -751,7 +751,7 @@ func active_quest_text() -> String:
 	for quest: Dictionary in quests:
 		if str(quest.state) == "active":
 			return "%s: %d/%d" % [str(quest.name), int(quest.progress), int(quest.needed)]
-	return "No active expedition"
+	return "진행 중인 원정 없음"
 
 func _setup_input_actions() -> void:
 	_add_key_action("move_up", KEY_W)

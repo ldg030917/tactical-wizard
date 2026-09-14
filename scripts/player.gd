@@ -236,11 +236,11 @@ func current_spell_config() -> RuntimeSpellConfig:
 
 func current_spell_name() -> String:
 	var config := current_spell_config()
-	return config.base_spell.display_name if config != null and config.valid else "Empty Page"
+	return config.base_spell.display_name if config != null and config.valid else "빈 페이지"
 
 func current_spellbook_name() -> String:
 	var book: SpellbookData = GameState.equipped_spellbook()
-	return book.display_name if book != null else "No Spellbook"
+	return book.display_name if book != null else "마도서 없음"
 
 func cooldown_remaining() -> float:
 	return page_cooldowns[selected_page] if selected_page < page_cooldowns.size() else 0.0
@@ -308,16 +308,16 @@ func begin_cast() -> bool:
 		return false
 	var is_explosion: bool = config.base_spell.spell_id == "explosion"
 	if is_explosion and not in_raid:
-		_show_message("Explosion can only be invoked during an expedition.")
+		_show_message("대폭발은 원정 중에만 시전할 수 있습니다.")
 		return false
 	if is_explosion and not GameState.can_use_explosion():
-		_show_message("Explosion has already been used during this expedition.")
+		_show_message("이번 원정에서는 이미 대폭발을 사용했습니다.")
 		return false
 	if is_explosion and mana + 0.001 < max_mana:
-		_show_message("Explosion requires a completely full mana reserve.")
+		_show_message("대폭발은 마나가 가득해야 시전할 수 있습니다.")
 		return false
 	if not is_explosion and mana + 0.001 < config.mana_cost:
-		_show_message("Insufficient mana — use an Azure Tonic or wait for regeneration.")
+		_show_message("마나가 부족합니다. 청색 마나 물약을 쓰거나 회복을 기다리세요.")
 		return false
 	casting = true
 	cast_elapsed = 0.0
@@ -450,9 +450,9 @@ func take_damage(amount: float, source: Vector3 = Vector3.ZERO, bleed_chance: fl
 		var absorbed: float = minf(ward, reduced)
 		ward -= absorbed
 		reduced -= absorbed
-	last_element_feedback = "WEAKNESS" if relationship > 1.0 else "RESISTED" if relationship < 1.0 else ""
+	last_element_feedback = "약점" if relationship > 1.0 else "저항" if relationship < 1.0 else ""
 	if relationship > 1.0:
-		_show_message("ELEMENTAL WEAKNESS: %s overcomes %s" % [attack_element.to_upper(), defense_element.to_upper()])
+		_show_message("원소 약점: %s이(가) %s에 우세" % [KoreanLocalization.element(attack_element), KoreanLocalization.element(defense_element)])
 	health = maxf(0.0, health - reduced)
 	last_damage_time = Time.get_ticks_msec() / 1000.0
 	mana_regen_delay = maxf(mana_regen_delay, 3.0)
@@ -509,7 +509,7 @@ func quick_heal() -> void:
 	if int(GameState.raid_inventory.get(item_id, 0)) <= 0:
 		item_id = "bandage" if int(GameState.raid_inventory.get("bandage", 0)) > 0 else "medkit"
 	if int(GameState.raid_inventory.get(item_id, 0)) <= 0:
-		_show_message("No restorative potion equipped.")
+		_show_message("장착한 회복약이 없습니다.")
 		return
 	GameState.remove_raid_item(item_id, 1)
 	var info: Dictionary = ItemDB.get_item(item_id)
@@ -610,7 +610,7 @@ func apply_exhaustion(duration: float = 3.0) -> void:
 	exhaustion_remaining = maxf(exhaustion_remaining, duration)
 	stamina = 0.0
 	velocity = Vector3.ZERO
-	_show_message("EXHAUSTED - movement disabled for 3 seconds.")
+	_show_message("탈진 — 3초 동안 이동할 수 없습니다.")
 
 func _limited_aim_target(max_range: float) -> Vector3:
 	var flat: Vector3 = aim_point - global_position

@@ -2,8 +2,8 @@ class_name BaseUpgradeData
 extends Resource
 
 @export var upgrade_id: String = "storage"
-@export var display_name: String = "Storage"
-@export_multiline var description: String = "Improves the base."
+@export var display_name: String = "보관함"
+@export_multiline var description: String = "거점 시설을 개선합니다."
 @export_range(1, 5, 1) var maximum_level: int = 3
 @export_range(0, 5000, 1) var currency_cost_per_level: int = 180
 @export var material_item: ItemData

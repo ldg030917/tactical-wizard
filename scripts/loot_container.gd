@@ -8,8 +8,8 @@ signal item_taken(item_id: String, amount: int)
 
 @export_category("Container Identity")
 @export var container_id: String = "wooden_crate"
-@export var container_name: String = "Wooden Crate"
-@export_multiline var interaction_text: String = "Search container"
+@export var container_name: String = "나무 상자"
+@export_multiline var interaction_text: String = "수색:"
 
 @export_category("Loot")
 @export var loot_table: LootTableData
@@ -24,7 +24,7 @@ signal item_taken(item_id: String, amount: int)
 
 @export_category("Visual State")
 @export_enum("rotate_lid", "hide_lid", "unchanged") var opened_visual_state: String = "rotate_lid"
-@export var searched_label_text: String = "SEARCHED"
+@export var searched_label_text: String = "수색 완료"
 
 var required_item_override: String = ""
 var required_item: String:
@@ -58,29 +58,29 @@ func set_preset_loot(items: Dictionary) -> void:
 
 func get_interaction_text(_player: PlayerController) -> String:
 	if starts_locked and required_item.is_empty():
-		return "%s (locked)" % container_name
+		return "%s (잠김)" % container_name
 	if not required_item.is_empty() and int(GameState.raid_inventory.get(required_item, 0)) <= 0 and int(GameState.raid_secure.get(required_item, 0)) <= 0:
-		return "%s (requires %s)" % [container_name, ItemDB.display_name(required_item)]
+		return "%s (필요: %s)" % [container_name, ItemDB.display_name(required_item)]
 	if searching:
-		return "Searching..."
+		return "수색 중..."
 	if contents.is_empty() and searched:
-		return "%s (empty)" % container_name
+		return "%s (비어 있음)" % container_name
 	return "%s: %s" % [interaction_text, container_name]
 
 func interact(_player: PlayerController) -> void:
 	if searching:
 		return
 	if starts_locked and required_item.is_empty():
-		status_label.text = "LOCKED"
+		status_label.text = "잠김"
 		return
 	if not required_item.is_empty() and int(GameState.raid_inventory.get(required_item, 0)) <= 0 and int(GameState.raid_secure.get(required_item, 0)) <= 0:
-		status_label.text = "LOCKED — %s" % ItemDB.display_name(required_item)
+		status_label.text = "잠김 — %s 필요" % ItemDB.display_name(required_item)
 		return
 	if not generated:
 		generate_loot()
 	searching = true
 	search_started.emit(self)
-	status_label.text = "SEARCHING..."
+	status_label.text = "수색 중..."
 	await get_tree().create_timer(search_duration).timeout
 	if not is_inside_tree():
 		return
@@ -91,7 +91,7 @@ func interact(_player: PlayerController) -> void:
 		lid.position = open_marker.position
 	elif opened_visual_state == "hide_lid":
 		lid.visible = false
-	status_label.text = searched_label_text if not contents.is_empty() else "EMPTY"
+	status_label.text = searched_label_text if not contents.is_empty() else "비어 있음"
 	search_completed.emit(self)
 	var raid: Node = _raid_scene()
 	if raid.has_method("show_loot"):
@@ -101,7 +101,7 @@ func generate_loot() -> void:
 	generated = true
 	if loot_table != null:
 		contents = loot_table.roll(rng)
-	if container_name.contains("Sealed Signal"):
+	if container_id.contains("sealed_signal"):
 		contents["signal_core"] = 1
 	_apply_regional_bias()
 
@@ -127,7 +127,7 @@ func take_item(item_id: String) -> bool:
 	contents[item_id] = int(contents[item_id]) - 1
 	if int(contents[item_id]) <= 0:
 		contents.erase(item_id)
-	status_label.text = "EMPTY" if contents.is_empty() else "OPEN"
+	status_label.text = "비어 있음" if contents.is_empty() else "열림"
 	item_taken.emit(item_id, 1)
 	return true
 

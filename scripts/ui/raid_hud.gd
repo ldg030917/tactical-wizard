@@ -32,7 +32,7 @@ const ITEM_SLOT_SCENE := preload("res://scenes/ui/item_slot.tscn")
 
 var raid: RaidScene
 var player: PlayerController
-var weather_name: String = "Clear"
+var weather_name: String = "맑음"
 var selected_container: LootContainer
 var combat_slot_buttons: Array[Button] = []
 var raid_workshop_page: int = 0
@@ -49,7 +49,7 @@ func _ready() -> void:
 		button.custom_minimum_size = Vector2(82, 82)
 		button.expand_icon = true
 		button.text = str(index + 1)
-		button.tooltip_text = "Combat slot %d" % (index + 1)
+		button.tooltip_text = "전투 슬롯 %d" % (index + 1)
 		button.pressed.connect(func() -> void: if player != null: player.select_combat_slot(index))
 		combat_slots.add_child(button)
 		combat_slot_buttons.append(button)
@@ -66,18 +66,18 @@ func _process(_delta: float) -> void:
 		return
 	var conditions: PackedStringArray = []
 	if player.bleeding:
-		conditions.append("BLEEDING")
+		conditions.append("출혈")
 	if player.burn_remaining > 0.0:
-		conditions.append("BURNING")
+		conditions.append("화상")
 	if player.slow_remaining > 0.0:
-		conditions.append("CHILLED")
+		conditions.append("둔화")
 	if player.poison_remaining > 0.0:
-		conditions.append("POISONED")
+		conditions.append("중독")
 	for body_part: String in player.injuries.keys():
 		if float(player.injuries[body_part]) > 0.05:
-			conditions.append("%s INJURY" % body_part.replace("_", " ").to_upper())
+			conditions.append("%s 부상" % {"head":"머리", "torso":"몸통", "left_arm":"왼팔", "right_arm":"오른팔", "left_leg":"왼다리", "right_leg":"오른다리"}.get(body_part, body_part))
 	var condition_text: String = "  |  " + ", ".join(conditions) if not conditions.is_empty() else ""
-	vitals.text = "HP %d/%d   MANA %d/%d   STA %d/%d   WARD %d%s" % [int(player.health), int(player.max_health), int(player.mana), int(player.max_mana), int(player.stamina), int(player.max_stamina), int(player.ward), condition_text]
+	vitals.text = "체력 %d/%d   마나 %d/%d   기력 %d/%d   보호막 %d%s" % [int(player.health), int(player.max_health), int(player.mana), int(player.max_mana), int(player.stamina), int(player.max_stamina), int(player.ward), condition_text]
 	health_gauge.max_value = player.max_health
 	health_gauge.value = player.health
 	mana_gauge.max_value = player.max_mana
@@ -87,14 +87,14 @@ func _process(_delta: float) -> void:
 	bleeding_indicator.visible = player.bleeding
 	var config := player.current_spell_config()
 	var mana_cost: int = int(ceil(config.mana_cost)) if config != null and config.valid else 0
-	spell_status.text = "%s  |  %s  |  CURRENT ELEMENT: %s  |  Cost %d  |  Cooldown %.1fs" % [player.current_spellbook_name(), player.current_spell_name() if player.active_combat_slot < 3 else _dagger_name(), player.current_primary_element().to_upper(), mana_cost, player.cooldown_remaining()]
+	spell_status.text = "%s  |  %s  |  현재 원소: %s  |  소모 %d  |  재사용 %.1f초" % [player.current_spellbook_name(), player.current_spell_name() if player.active_combat_slot < 3 else _dagger_name(), KoreanLocalization.element(player.current_primary_element()), mana_cost, player.cooldown_remaining()]
 	var slot_text := "[1] %s    [2] %s    [3] %s    [4] %s" % [_page_name(0), _page_name(1), _page_name(2), _dagger_name()]
 	spell_pages.text = slot_text
 	_update_combat_slot_icons()
 	consumables.text = "[F] %s x%d\n[G] %s x%d" % [ItemDB.display_name("health_potion"), int(GameState.raid_inventory.get("health_potion", 0)), ItemDB.display_name("mana_potion"), int(GameState.raid_inventory.get("mana_potion", 0))]
 	cast_progress.visible = player.casting
 	cast_progress.value = player.cast_progress_ratio() * 100.0
-	objective.text = "%s  |  %s: %s  |  Pack %d/%d (%.1f kg)" % [GameState.active_quest_text(), raid.region_display_name, weather_name, GameState.inventory_slots(GameState.raid_inventory), GameState.raid_capacity(), GameState.inventory_weight(GameState.raid_inventory)]
+	objective.text = "%s  |  %s: %s  |  가방 %d/%d (%.1f kg)" % [GameState.active_quest_text(), raid.region_display_name, weather_name, GameState.inventory_slots(GameState.raid_inventory), GameState.raid_capacity(), GameState.inventory_weight(GameState.raid_inventory)]
 	interaction_prompt.text = "◇  E" if not player.nearby_interaction.is_empty() else ""
 	interaction_prompt.tooltip_text = player.nearby_interaction
 	reticle.text = "◎" if config != null and config.valid and config.behavior_type != "projectile" else "+"
@@ -102,18 +102,18 @@ func _process(_delta: float) -> void:
 
 func _page_name(index: int) -> String:
 	if player == null or index >= player.page_configs.size():
-		return "Empty"
+		return "비어 있음"
 	var config: RuntimeSpellConfig = player.page_configs[index]
-	var name: String = config.base_spell.display_name if config != null and config.valid else "Empty"
-	var element := config.base_spell.primary_element.to_upper() if config != null and config.valid else "NEUTRAL"
+	var name: String = config.base_spell.display_name if config != null and config.valid else "비어 있음"
+	var element := KoreanLocalization.element(config.base_spell.primary_element) if config != null and config.valid else "중립"
 	return ("> " if player.active_combat_slot == index else "") + "%s <%s>" % [name, element]
 
 func _dagger_name() -> String:
 	if player == null:
-		return "Empty Dagger"
+		return "빈 단검 슬롯"
 	var dagger := player.equipped_dagger()
-	var name := dagger.display_name if dagger != null else "Empty Dagger"
-	var element := dagger.primary_element.to_upper() if dagger != null else "NEUTRAL"
+	var name := dagger.display_name if dagger != null else "빈 단검 슬롯"
+	var element := KoreanLocalization.element(dagger.primary_element) if dagger != null else "중립"
 	return ("> " if player.active_combat_slot == 3 else "") + "%s <%s>" % [name, element]
 
 func _update_combat_slot_icons() -> void:
@@ -123,13 +123,13 @@ func _update_combat_slot_icons() -> void:
 		var config: RuntimeSpellConfig = player.page_configs[index] if index < player.page_configs.size() else null
 		var spell: BaseSpellData = config.base_spell if config != null and config.valid else null
 		combat_slot_buttons[index].icon = UIIconFactory.spell_icon(spell, 96) if spell != null else UIIconFactory.icon("?", "neutral", 96)
-		combat_slot_buttons[index].tooltip_text = "%s\n%s" % [spell.display_name if spell != null else "Empty Spell Slot", config.behavior_description() if config != null else ""]
+		combat_slot_buttons[index].tooltip_text = "%s\n%s" % [spell.display_name if spell != null else "빈 주문 슬롯", config.behavior_description() if config != null else ""]
 		combat_slot_buttons[index].disabled = config == null or not config.valid
 		var enough_mana: bool = config != null and player.mana + 0.001 >= config.mana_cost
 		combat_slot_buttons[index].modulate = Color.WHITE if player.active_combat_slot == index else Color(0.64, 0.64, 0.72, 0.92) if enough_mana else Color(0.48, 0.3, 0.34, 0.82)
 	var dagger_id: String = str(GameState.loadout.get("dagger", ""))
 	combat_slot_buttons[3].icon = UIIconFactory.item_icon(dagger_id, 96)
-	combat_slot_buttons[3].tooltip_text = _dagger_name() + "\nSpace: melee attack"
+	combat_slot_buttons[3].tooltip_text = _dagger_name() + "\nSpace: 근접 공격"
 	combat_slot_buttons[3].modulate = Color.WHITE if player.active_combat_slot == 3 else Color(0.52, 0.52, 0.6, 0.86)
 
 func toggle_inventory() -> void:
@@ -162,7 +162,7 @@ func refresh_inventory() -> void:
 	_clear(inventory_rows)
 	_clear(equipment_rows)
 	_build_raid_equipment()
-	capacity_summary.text = "Field pack %d/%d slots  |  Secure %d/2: %s" % [GameState.inventory_slots(GameState.raid_inventory), GameState.raid_capacity(), GameState.inventory_slots(GameState.raid_secure), _items_text(GameState.raid_secure)]
+	capacity_summary.text = "현장 가방 %d/%d칸  |  보호 슬롯 %d/2: %s" % [GameState.inventory_slots(GameState.raid_inventory), GameState.raid_capacity(), GameState.inventory_slots(GameState.raid_secure), _items_text(GameState.raid_secure)]
 	var grid := GridContainer.new()
 	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", 8)
@@ -185,32 +185,32 @@ func refresh_inventory() -> void:
 		if category in ["medical", "mana_consumable", "food", "drink"]:
 			var use_button := Button.new()
 			use_button.text = "✚"
-			use_button.tooltip_text = "Use item"
+			use_button.tooltip_text = "사용"
 			use_button.pressed.connect(_use_item.bind(item_id))
 			actions.add_child(use_button)
 		elif category in ["spell", "spellbook", "focus", "dagger", "melee", "armor_head", "armor_chest", "accessory", "backpack", "armor"]:
 			var equip_button := Button.new()
 			equip_button.text = "↗"
-			equip_button.tooltip_text = "Equip"
+			equip_button.tooltip_text = "장착"
 			equip_button.pressed.connect(_equip_item.bind(item_id))
 			actions.add_child(equip_button)
 		var secure_button := Button.new()
 		secure_button.text = "◇"
-		secure_button.tooltip_text = "Move to protected slots"
+		secure_button.tooltip_text = "보호 슬롯으로 이동"
 		secure_button.pressed.connect(_secure_item.bind(item_id))
 		actions.add_child(secure_button)
 		var discard_button := Button.new()
 		discard_button.text = "×"
-		discard_button.tooltip_text = "Discard"
+		discard_button.tooltip_text = "버리기"
 		discard_button.pressed.connect(_discard_item.bind(item_id))
 		actions.add_child(discard_button)
 	if GameState.raid_inventory.is_empty():
 		var empty := Label.new()
-		empty.text = "The field pack is empty. Search arcane containers and fallen foes."
+		empty.text = "현장 가방이 비었습니다. 마법 상자와 쓰러진 적을 수색하세요."
 		inventory_rows.add_child(empty)
 
 func _build_raid_equipment() -> void:
-	var labels := {"spellbook":"Book", "focus":"Focus", "dagger":"Dagger", "head":"Head", "chest":"Body", "accessory_1":"Acc. 1", "accessory_2":"Acc. 2", "backpack":"Pack"}
+	var labels := {"spellbook":"마도서", "focus":"촉매", "dagger":"단검", "head":"머리", "chest":"몸통", "accessory_1":"장신구 1", "accessory_2":"장신구 2", "backpack":"가방"}
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 8)
@@ -234,7 +234,7 @@ func _build_raid_equipment() -> void:
 		if not item_id.is_empty():
 			var remove := Button.new()
 			remove.text = "×"
-			remove.tooltip_text = "Move to field pack"
+			remove.tooltip_text = "현장 가방으로 이동"
 			remove.pressed.connect(_unequip_raid_slot.bind(slot))
 			card.add_child(remove)
 
@@ -251,7 +251,7 @@ func refresh_spell_settings() -> void:
 		var config := GameState.spell_config(page_index)
 		page_button.icon = UIIconFactory.spell_icon(config.base_spell, 64) if config.valid else UIIconFactory.icon("?", "neutral", 64)
 		page_button.add_theme_constant_override("icon_max_width", 58)
-		page_button.text = "PAGE %d\n%s" % [page_index + 1, config.base_spell.display_name if config.valid else "Empty"]
+		page_button.text = "%d페이지\n%s" % [page_index + 1, config.base_spell.display_name if config.valid else "비어 있음"]
 		page_button.disabled = page_index == raid_workshop_page
 		page_button.pressed.connect(_select_raid_workshop_page.bind(page_index))
 		raid_page_buttons.add_child(page_button)
@@ -268,7 +268,7 @@ func refresh_spell_settings() -> void:
 	var capacity: int = 0 if attachments_locked else book.maximum_modifiers_per_page if book != null else 0
 	if attachments_locked:
 		var locked_notice := Label.new()
-		locked_notice.text = "ATTACHMENTS LOCKED\nExplosion is a sealed formula."
+		locked_notice.text = "부착 룬 잠김\n대폭발은 봉인된 주문식입니다."
 		locked_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		raid_fixed_sockets.add_child(locked_notice)
 	for socket_index: int in range(capacity):
@@ -284,7 +284,7 @@ func refresh_spell_settings() -> void:
 		if not installed_id.is_empty():
 			var remove := Button.new()
 			remove.text = "×"
-			remove.tooltip_text = "Return rune to field pack"
+			remove.tooltip_text = "룬을 현장 가방으로 이동"
 			remove.pressed.connect(_remove_raid_modifier.bind(socket_index))
 			card.add_child(remove)
 	var library_grid := GridContainer.new()
@@ -317,7 +317,7 @@ func _on_raid_spell_drop(payload: Dictionary, target_context: String, target_slo
 	elif target_context == "raid_spell_attachment":
 		var result: Dictionary = raid.install_raid_modifier(int(target_slot.get_slice(":", 0)), item_id)
 		if not bool(result.get("success", false)):
-			show_message(str(result.get("message", "Rune could not be installed.")))
+			show_message(str(result.get("message", "룬을 장착할 수 없습니다.")))
 	refresh_spell_settings()
 
 func _on_raid_equipment_drop(payload: Dictionary, _target_context: String, target_slot: String) -> void:
@@ -326,11 +326,11 @@ func _on_raid_equipment_drop(payload: Dictionary, _target_context: String, targe
 
 func _remove_raid_modifier(socket_index: int) -> void:
 	if raid != null and not raid.remove_raid_modifier(raid_workshop_page, socket_index):
-		show_message("Field pack is full; the rune could not be removed.")
+		show_message("현장 가방이 가득 차 룬을 제거할 수 없습니다.")
 
 func _unequip_raid_slot(slot: String) -> void:
 	if raid != null and not raid.unequip_raid_slot(slot):
-		show_message("Field pack is full; the item could not be unequipped.")
+		show_message("현장 가방이 가득 차 아이템을 해제할 수 없습니다.")
 
 func _raid_slot_categories(slot: String) -> Array[String]:
 	match slot:
@@ -359,7 +359,7 @@ func refresh_loot() -> void:
 	_clear(loot_rows)
 	if selected_container == null or selected_container.contents.is_empty():
 		var empty := Label.new()
-		empty.text = "Nothing remains."
+		empty.text = "남은 것이 없습니다."
 		loot_rows.add_child(empty)
 		return
 	for item_id: String in selected_container.contents.keys():
@@ -370,7 +370,7 @@ func refresh_loot() -> void:
 		item_slot.configure(item_id, int(selected_container.contents[item_id]), "loot", item_id, false)
 		var button := Button.new()
 		button.text = "←"
-		button.tooltip_text = "Take %s" % ItemDB.display_name(item_id)
+		button.tooltip_text = "%s 획득" % ItemDB.display_name(item_id)
 		button.pressed.connect(_take_loot.bind(item_id))
 		row.add_child(button)
 
@@ -405,7 +405,7 @@ func _equip_item(item_id: String) -> void:
 
 func _secure_item(item_id: String) -> void:
 	if not GameState.secure_item(item_id):
-		show_message("Secure slot is full, too small, or rejects equipped gear.")
+		show_message("보호 슬롯이 가득 찼거나 공간이 부족하거나 장비를 넣을 수 없습니다.")
 	refresh_inventory()
 
 func _discard_item(item_id: String) -> void:
@@ -416,7 +416,7 @@ func _take_loot(item_id: String) -> void:
 	if selected_container == null:
 		return
 	if not selected_container.take_item(item_id):
-		show_message("Field pack is full. Discard or secure something first.")
+		show_message("현장 가방이 가득 찼습니다. 먼저 아이템을 버리거나 보호하세요.")
 	refresh_loot()
 	refresh_inventory()
 
@@ -426,7 +426,7 @@ func _clear(container: Container) -> void:
 
 func _items_text(items: Dictionary) -> String:
 	if items.is_empty():
-		return "empty"
+		return "비어 있음"
 	var parts: PackedStringArray = []
 	for item_id: String in items.keys():
 		parts.append("%s x%d" % [ItemDB.display_name(item_id), int(items[item_id])])

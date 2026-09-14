@@ -3,22 +3,22 @@
 [ext_resource path="res://scenes/regions/region_gateway.tscn" type="PackedScene" id="2"]
 [node name="NeutralFrontierRaid" instance=ExtResource("1")]
 region_id = "neutral_frontier"
-region_display_name = "Gilt Observatory"
+region_display_name = "황금 천문대"
 region_primary_element = "neutral"
 hazard_type = "none"
 region_tint = Color(0.82, 0.77, 0.58, 1)
 [node name="GatewayToFireRegion" parent="." instance=ExtResource("2")]
 position = Vector3(-18, 0.1, -18)
 destination_region_id = "fire_region"
-gateway_name = "Cinder Waygate — Fire"
+gateway_name = "잿불 관문 — 불"
 gateway_color = Color(1, 0.35, 0.14, 1)
 [node name="GatewayToWaterRegion" parent="." instance=ExtResource("2")]
 position = Vector3(0, 0.1, -21)
 destination_region_id = "water_region"
-gateway_name = "Tidal Waygate — Water"
+gateway_name = "해일 관문 — 물"
 gateway_color = Color(0.2, 0.72, 1, 1)
 [node name="GatewayToGrassRegion" parent="." instance=ExtResource("2")]
 position = Vector3(18, 0.1, -18)
 destination_region_id = "grass_region"
-gateway_name = "Verdant Waygate — Grass"
+gateway_name = "초록 관문 — 풀"
 gateway_color = Color(0.35, 0.8, 0.35, 1)

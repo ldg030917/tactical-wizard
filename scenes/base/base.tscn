@@ -131,8 +131,11 @@ mesh = SubResource("FenceGapMesh")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.5, 11)
 billboard = 1
 modulate = Color(0.46, 0.87, 0.69, 1)
-text = "RETURN WAYSTONE"
-font_size = 28
+text = "귀환석"
+font_size = 56
+outline_size = 12
+pixel_size = 0.0015
+no_depth_test = true
 
 [node name="Lighting" type="Node3D" parent="Environment" unique_id=224288694]
 
@@ -237,9 +240,9 @@ alignment = 1
 theme_override_constants/separation = 10
 
 [node name="Hint" type="Label" parent="BaseSpellHUD/Root/Panel/Layout"]
-text = "1–3 select  •  Left click casts  •  Mana regenerates"
+text = "1–3 선택  •  좌클릭 시전  •  마나 자동 회복"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 18
 
 [node name="BaseUI" parent="." unique_id=256998052 instance=ExtResource("12")]
 unique_name_in_owner = true

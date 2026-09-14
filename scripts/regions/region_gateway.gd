@@ -6,7 +6,7 @@ const REGION_GRAPH := preload("res://scripts/regions/region_graph.gd")
 
 @export_category("Connected Region")
 @export var destination_region_id: String = "neutral_frontier"
-@export var gateway_name: String = "Neutral Waygate"
+@export var gateway_name: String = "중립 관문"
 @export var gateway_color: Color = Color("f3df9b")
 
 @export_category("Travel")
@@ -25,14 +25,14 @@ func _process(_delta: float) -> void:
 
 func get_interaction_text(_player: PlayerController) -> String:
 	if travelling:
-		return "Opening %s..." % gateway_name
+		return "%s 여는 중..." % gateway_name
 	var current_id: String = GameState.current_raid_region_id
 	if not REGION_GRAPH.are_connected(current_id, destination_region_id):
-		return "%s (not connected)" % gateway_name
+		return "%s (연결 안 됨)" % gateway_name
 	var region := ContentRegistry.regions().get(destination_region_id) as RegionData
 	if region != null and not GameState.can_enter_raid_region(destination_region_id):
-		return "%s (requires %s)" % [gateway_name, ItemDB.display_name(region.required_ticket_id) if not region.required_ticket_id.is_empty() else "%d crowns" % region.entry_cost]
-	return "Travel through %s" % gateway_name
+		return "%s (필요: %s)" % [gateway_name, ItemDB.display_name(region.required_ticket_id) if not region.required_ticket_id.is_empty() else "%d 크라운" % region.entry_cost]
+	return "%s으로 이동" % gateway_name
 
 func interact(player: PlayerController) -> void:
 	if travelling or not REGION_GRAPH.are_connected(GameState.current_raid_region_id, destination_region_id):
@@ -40,11 +40,11 @@ func interact(player: PlayerController) -> void:
 	if not GameState.can_enter_raid_region(destination_region_id):
 		var raid: Node = _raid_scene()
 		if raid != null and raid.has_method("show_message"):
-			raid.show_message("The waygate rejects your entry payment.")
+			raid.show_message("관문이 입장 비용을 거부했습니다.")
 		return
 	travelling = true
 	player.set_physics_process(false)
-	%GatewayLabel.text = "CHANNELING..."
+	%GatewayLabel.text = "집중 중..."
 	await get_tree().create_timer(channel_duration).timeout
 	if not is_inside_tree():
 		return

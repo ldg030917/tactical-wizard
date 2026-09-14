@@ -33,7 +33,7 @@ offset_bottom = 62.0
 
 [node name="HeaderLabel" type="Label" parent="Root/HeaderPanel"]
 unique_name_in_owner = true
-text = "STARFALL REFUGE"
+text = "별무리 피난처"
 horizontal_alignment = 2
 theme_override_font_sizes/font_size = 17
 
@@ -53,7 +53,7 @@ theme_override_constants/separation = 7
 
 [node name="Title" type="Label" parent="Root/FacilityMenu/Buttons"]
 visible = false
-text = "REFUGE FACILITIES"
+text = "피난처 시설"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 18
 
@@ -104,7 +104,7 @@ text = ""
 
 [node name="Help" type="Label" parent="Root/FacilityMenu/Buttons"]
 visible = false
-text = "WASD move | E interact\nMouse aim | Esc pause"
+text = "WASD 이동 | E 상호작용\n마우스 조준 | Esc 일시정지"
 horizontal_alignment = 1
 
 [node name="ContentArea" type="MarginContainer" parent="Root"]
@@ -130,10 +130,10 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 [node name="Layout" type="VBoxContainer" parent="Root/ContentArea/Panels/CharacterUI"]
 [node name="Title" type="Label" parent="Root/ContentArea/Panels/CharacterUI/Layout"]
-text = "CHARACTER SPECIALIZATION"
+text = "캐릭터 특화"
 theme_override_font_sizes/font_size = 24
 [node name="Note" type="Label" parent="Root/ContentArea/Panels/CharacterUI/Layout"]
-text = "Specializations grant bonuses but never lock spells, elements, daggers, or equipment."
+text = "특화는 보너스만 제공하며 주문, 원소, 단검, 장비를 제한하지 않습니다."
 autowrap_mode = 2
 [node name="Scroll" type="ScrollContainer" parent="Root/ContentArea/Panels/CharacterUI/Layout"]
 size_flags_vertical = 3
@@ -198,15 +198,15 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 [node name="Layout" type="VBoxContainer" parent="Root/ContentArea/Panels/SettingsUI"]
 [node name="Title" type="Label" parent="Root/ContentArea/Panels/SettingsUI/Layout"]
-text = "SETTINGS"
+text = "설정"
 theme_override_font_sizes/font_size = 24
 [node name="FullscreenCheck" type="CheckButton" parent="Root/ContentArea/Panels/SettingsUI/Layout"]
 unique_name_in_owner = true
-text = "Fullscreen"
+text = "전체 화면"
 [node name="VSyncCheck" type="CheckButton" parent="Root/ContentArea/Panels/SettingsUI/Layout"]
 unique_name_in_owner = true
 button_pressed = true
-text = "VSync"
+text = "수직 동기화"
 
 [node name="FeedbackLabel" type="Label" parent="Root"]
 unique_name_in_owner = true

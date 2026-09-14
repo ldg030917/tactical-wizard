@@ -2,6 +2,7 @@
 [ext_resource path="res://scenes/base/station_base.tscn" type="PackedScene" id="1"]
 [node name="DeploymentTerminal" instance=ExtResource("1")]
 station_id = "deploy"
-display_name = "Raid Deployment Gate"
-interaction_description = "Deploy"
+display_name = "원정 출발 관문"
+interaction_description = "출발:"
 level = 2
+visual_kind = "terminal"

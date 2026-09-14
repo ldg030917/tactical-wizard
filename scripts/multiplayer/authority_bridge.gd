@@ -26,16 +26,15 @@ func request_inventory_transaction(transaction: Dictionary) -> void:
 func _validate_transaction(peer_id: int, transaction: Dictionary) -> bool:
 	var transaction_id: String = str(transaction.get("transaction_id", ""))
 	if transaction_id.is_empty():
-		rejected_inventory_transaction.emit(peer_id, "Missing transaction identity.")
+		rejected_inventory_transaction.emit(peer_id, "거래 식별 정보가 없습니다.")
 		return false
 	if reject_duplicate_transaction_ids and processed_transaction_ids.has(transaction_id):
-		rejected_inventory_transaction.emit(peer_id, "Duplicate transaction rejected.")
+		rejected_inventory_transaction.emit(peer_id, "중복 거래가 거부되었습니다.")
 		return false
 	var operation: String = str(transaction.get("operation", ""))
 	if operation not in ["loot_pickup", "equipment_swap", "consume_item", "extract", "player_loot"]:
-		rejected_inventory_transaction.emit(peer_id, "Unsupported inventory operation.")
+		rejected_inventory_transaction.emit(peer_id, "지원하지 않는 가방 작업입니다.")
 		return false
 	processed_transaction_ids[transaction_id] = Time.get_unix_time_from_system()
 	validated_inventory_transaction.emit(peer_id, transaction)
 	return true
-

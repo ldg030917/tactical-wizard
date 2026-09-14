@@ -30,12 +30,12 @@ offset_bottom = 260.0
 alignment = 1
 [node name="ResultTitle" type="Label" parent="ResultPanel/Layout"]
 unique_name_in_owner = true
-text = "EXTRACTION COMPLETE"
+text = "탈출 완료"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 34
 [node name="ResultDetails" type="Label" parent="ResultPanel/Layout"]
 unique_name_in_owner = true
-text = "Recovered items"
+text = "회수한 아이템"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 19
 [node name="QuestProgress" type="Label" parent="ResultPanel/Layout"]
@@ -44,4 +44,4 @@ horizontal_alignment = 1
 [node name="ReturnButton" type="Button" parent="ResultPanel/Layout"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
-text = "Return to Starfall Refuge"
+text = "별무리 피난처로 귀환"

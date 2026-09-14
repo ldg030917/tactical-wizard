@@ -2,5 +2,6 @@
 [ext_resource path="res://scenes/base/station_base.tscn" type="PackedScene" id="1"]
 [node name="LoadoutStation" instance=ExtResource("1")]
 station_id = "stash"
-display_name = "Mage Equipment Rack"
-interaction_description = "Open equipment and storage at"
+display_name = "마법사 장비대"
+interaction_description = "장비와 보관함 열기:"
+visual_kind = "loadout"

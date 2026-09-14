@@ -49,4 +49,4 @@ modulate = Color(0.91, 0.87, 0.73, 1)
 font_size = 22
 billboard = 1
 no_depth_test = true
-text = "Wooden Crate"
+text = "나무 상자"

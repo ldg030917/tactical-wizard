@@ -22,4 +22,4 @@ mesh = SubResource("2")
 material_override = SubResource("3")
 [node name="WallLabel" type="Label3D" parent="."]
 position = Vector3(0, 1.8, 0)
-text = "LIVING WALL"
+text = "생명의 벽"

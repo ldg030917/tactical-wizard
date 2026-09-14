@@ -8,7 +8,7 @@ signal extraction_completed(extraction_id: String)
 
 @export_category("Extraction Identity")
 @export var extraction_id: String = "old_footbridge"
-@export var extraction_name: String = "Old Footbridge"
+@export var extraction_name: String = "옛 보행교"
 @export var destination_scene: String = "res://scenes/base/base.tscn"
 
 @export_category("Availability")
@@ -76,8 +76,8 @@ func _process(delta: float) -> void:
 	var has_requirement: bool = (always_available or not required_item.is_empty() or not required_quest_id.is_empty() or currency_cost > 0) and has_key and has_quest and has_currency
 	if not has_requirement:
 		if raid.has_method("set_extraction_status"):
-			var requirement_text: String = ItemDB.display_name(required_item) if not required_item.is_empty() else ("contract %s" % required_quest_id if not required_quest_id.is_empty() else "%d crowns" % currency_cost)
-			raid.set_extraction_status("%s — requires %s" % [extraction_name, requirement_text])
+			var requirement_text: String = ItemDB.display_name(required_item) if not required_item.is_empty() else ("의뢰 %s" % required_quest_id if not required_quest_id.is_empty() else "%d 크라운" % currency_cost)
+			raid.set_extraction_status("%s — 필요: %s" % [extraction_name, requirement_text])
 		return
 	if countdown <= 0.0:
 		countdown = countdown_duration
@@ -87,7 +87,7 @@ func _process(delta: float) -> void:
 	if damage_interrupts and now - player.last_damage_time < 0.25:
 		countdown = countdown_duration
 	if raid.has_method("set_extraction_status"):
-		raid.set_extraction_status("EXTRACTING: %s  %.1fs" % [extraction_name, maxf(0.0, countdown)])
+		raid.set_extraction_status("탈출 중: %s  %.1f초" % [extraction_name, maxf(0.0, countdown)])
 	if countdown <= 0.0:
 		completed = true
 		if currency_cost > 0:

@@ -3,7 +3,7 @@ extends Resource
 
 @export_category("Identity")
 @export var dagger_id: String = "dagger"
-@export var display_name: String = "Field Dagger"
+@export var display_name: String = "현장 단검"
 @export_enum("fire", "water", "grass", "neutral") var primary_element: String = "neutral"
 @export var weapon_family: String = "dagger"
 
@@ -20,4 +20,3 @@ extends Resource
 @export var placeholder_icon: Texture2D
 @export var placeholder_visual: PackedScene
 @export var debug_color: Color = Color("f3df9b")
-

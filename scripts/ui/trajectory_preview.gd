@@ -15,7 +15,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	draw_style_box(_panel_style(), Rect2(Vector2.ZERO, size))
 	if config == null or not config.valid or config.base_spell == null:
-		draw_string(ThemeDB.fallback_font, Vector2(30, size.y * 0.55), "Drop a spell formula here", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.65, 0.65, 0.72))
+		draw_string(ThemeDB.fallback_font, Vector2(30, size.y * 0.55), "주문식을 여기에 놓으세요", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(0.65, 0.65, 0.72))
 		return
 	var element_color: Color = ElementSystem.color(config.base_spell.primary_element)
 	var icon: Texture2D = UIIconFactory.spell_icon(config.base_spell, 96)

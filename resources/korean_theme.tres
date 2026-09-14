@@ -1,0 +1,8 @@
+[gd_resource type="Theme" load_steps=2 format=3]
+
+[sub_resource type="SystemFont" id="SystemFont_ko"]
+font_names = PackedStringArray("Malgun Gothic", "맑은 고딕", "Noto Sans CJK KR", "Noto Sans KR", "Noto Sans")
+
+[resource]
+default_font = SubResource("SystemFont_ko")
+default_font_size = 16

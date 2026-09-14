@@ -38,5 +38,5 @@ modulate = Color(0.46, 0.94, 0.77, 1)
 font_size = 30
 billboard = 1
 no_depth_test = true
-text = "Old Footbridge"
+text = "옛 보행교"
 [node name="ExtractionController" type="Node" parent="."]

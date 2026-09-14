@@ -2,6 +2,7 @@
 [ext_resource path="res://scenes/base/station_base.tscn" type="PackedScene" id="1"]
 [node name="SpellWorkshop" instance=ExtResource("1")]
 station_id = "spellbook"
-display_name = "Runesmith's Spell Workshop"
-interaction_description = "Prepare spell pages at"
+display_name = "룬세공 주문 작업실"
+interaction_description = "주문 페이지 준비:"
 level = 2
+visual_kind = "spellbook"

@@ -3,8 +3,8 @@ extends Resource
 
 @export_category("Identity")
 @export var item_id: String = "item_id"
-@export var display_name: String = "Item"
-@export_multiline var description: String = "Placeholder item."
+@export var display_name: String = "아이템"
+@export_multiline var description: String = "임시 아이템입니다."
 @export_enum("spellbook", "spell", "spell_modifier", "dagger", "focus", "medical", "mana_consumable", "armor_head", "armor_chest", "accessory", "backpack", "material", "parchment", "valuable", "quest", "ticket", "food", "drink", "weapon", "melee", "ammo", "attachment", "armor", "key") var category: String = "material"
 @export_enum("common", "uncommon", "rare", "epic") var rarity: String = "common"
 

@@ -3,11 +3,11 @@
 [node name="Layout" type="VBoxContainer" parent="."]
 [node name="Title" type="Label" parent="Layout"]
 unique_name_in_owner = true
-text = "ARCANE TRAINING"
+text = "비전 훈련"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 26
 [node name="Description" type="Label" parent="Layout"]
-text = "Select a discipline on the left; rank benefits and costs remain visible on the right."
+text = "왼쪽에서 훈련을 선택하면 단계 효과와 비용을 오른쪽에서 확인할 수 있습니다."
 [node name="Body" type="HSplitContainer" parent="Layout"]
 size_flags_vertical = 3
 split_offset = 410

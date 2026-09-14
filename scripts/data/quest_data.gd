@@ -3,8 +3,8 @@ extends Resource
 
 @export_category("Identity")
 @export var quest_id: String = "quest"
-@export var display_title: String = "Contract"
-@export_multiline var description: String = "Complete the objective."
+@export var display_title: String = "의뢰"
+@export_multiline var description: String = "목표를 완료하세요."
 @export var quest_npc_id: String = "mara_quill"
 @export_range(0, 100, 1) var sort_order: int = 0
 

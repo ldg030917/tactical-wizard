@@ -5,12 +5,12 @@
 [node name="Layout" type="VBoxContainer" parent="."]
 
 [node name="Title" type="Label" parent="Layout"]
-text = "EQUIPMENT & PERSISTENT STASH"
+text = "장비와 영구 보관함"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 26
 
 [node name="Description" type="Label" parent="Layout"]
-text = "Drag items from storage directly into equipment slots. Changes are shown immediately."
+text = "보관함의 아이템을 장비 슬롯으로 끌어다 놓으세요. 변경 사항은 즉시 반영됩니다."
 autowrap_mode = 2
 
 [node name="Body" type="HBoxContainer" parent="Layout"]
@@ -23,7 +23,7 @@ custom_minimum_size = Vector2(350, 0)
 [node name="EquipmentLayout" type="VBoxContainer" parent="Layout/Body/EquipmentPanel"]
 
 [node name="EquipmentTitle" type="Label" parent="Layout/Body/EquipmentPanel/EquipmentLayout"]
-text = "CURRENT EQUIPMENT"
+text = "현재 장비"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 19
 
@@ -40,7 +40,7 @@ size_flags_horizontal = 3
 [node name="StorageLayout" type="VBoxContainer" parent="Layout/Body/StoragePanel"]
 
 [node name="StorageTitle" type="Label" parent="Layout/Body/StoragePanel/StorageLayout"]
-text = "STORAGE"
+text = "보관함"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 19
 

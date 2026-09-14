@@ -18,4 +18,4 @@ modulate = Color(1, 0.83, 0.35, 1)
 font_size = 20
 billboard = 1
 no_depth_test = true
-text = "LOOT SPAWN"
+text = "전리품 생성 지점"

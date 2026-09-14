@@ -3,8 +3,8 @@ extends Resource
 
 @export_category("Modifier Identity")
 @export var modifier_id: String = "modifier"
-@export var display_name: String = "Spell Modifier"
-@export_multiline var description: String = "Changes a prepared spell."
+@export var display_name: String = "주문 부착 룬"
+@export_multiline var description: String = "준비한 주문의 성질을 바꿉니다."
 @export_enum("damage", "range", "mana", "cast_speed", "projectile_speed", "trajectory", "area", "split", "status", "family", "utility", "duration", "collision", "targeting") var modifier_category: String = "range"
 @export_enum("common", "uncommon", "rare", "epic") var rarity: String = "common"
 
@@ -54,11 +54,17 @@ func is_compatible(spell: BaseSpellData) -> bool:
 
 func incompatibility_reason(spell: BaseSpellData) -> String:
 	if spell == null:
-		return "Select a base spell first."
+		return "먼저 기본 주문을 선택하세요."
 	if is_compatible(spell):
 		return ""
 	if not compatible_primary_elements.is_empty() and spell.primary_element not in compatible_primary_elements:
-		return "Compatible elements: %s." % ", ".join(compatible_primary_elements)
+		var elements: Array[String] = []
+		for element_id: String in compatible_primary_elements:
+			elements.append(KoreanLocalization.element(element_id))
+		return "호환 원소: %s." % ", ".join(elements)
 	if not compatible_spell_families.is_empty() and spell.spell_family not in compatible_spell_families:
-		return "Compatible families: %s." % ", ".join(compatible_spell_families)
-	return "%s cannot accept %s modifiers." % [spell.display_name, modifier_category.capitalize()]
+		var families: Array[String] = []
+		for family_id: String in compatible_spell_families:
+			families.append(KoreanLocalization.family(family_id))
+		return "호환 계열: %s." % ", ".join(families)
+	return "%s에는 이 부착 룬을 사용할 수 없습니다." % spell.display_name

@@ -65,7 +65,7 @@ func _validate_visual_ui() -> void:
 	_check(16, slot.find_child("Amount", true, false) != null and ItemDB.resource("arcane_dust").stack_size > 1, "slot quantities or stack rules are missing")
 	_check(17, not ItemDB.resource("fireball_page").rarity.is_empty(), "rarity metadata is missing")
 	var tip: String = slot.build_tooltip(ItemDB.resource("fireball_page"))
-	_check(18, tip.contains("Mana") and tip.contains("Range") and tip.contains("Primary"), "detailed item hover information is incomplete")
+	_check(18, tip.contains("마나") and tip.contains("사거리") and tip.contains("주 원소"), "detailed item hover information is incomplete")
 	_check(19, not tip.is_empty(), "item tooltip positioning has no tooltip content")
 	_check(20, ItemDB.resource("apprentice_wand").focus != null, "comparison source equipment is unavailable")
 	_check(21, slot.find_child("ElementBadge", true, false) != null, "element symbol badge is missing")
@@ -76,7 +76,7 @@ func _validate_spell_and_attachment_ui() -> void:
 	_check(25, ItemDB.resource("fireball_page").category == "spell", "completed formula pages are unavailable")
 	_check(27, GameState.has_method("install_page_modifier") and GameState.has_method("remove_page_modifier"), "attachment drag install/remove operations are missing")
 	var modifier_tip := (load("res://scenes/ui/item_slot.tscn") as PackedScene).instantiate() as ItemSlot
-	_check(29, modifier_tip.build_tooltip(ItemDB.resource("mod_ricochet_rune")).contains("Trajectory"), "attachment tooltip lacks behavior and compatibility")
+	_check(29, modifier_tip.build_tooltip(ItemDB.resource("mod_ricochet_rune")).contains("궤적"), "attachment tooltip lacks behavior and compatibility")
 	modifier_tip.free()
 	_check(30, GameState.stash_capacity() > 0 and FileAccess.file_exists("res://scenes/ui/stash_ui.tscn"), "persistent storage is missing")
 	_check(14, GameState.spell_pages.size() == 3 and GameState.loadout.has("dagger"), "three spell slots and dagger slot are not represented")

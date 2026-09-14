@@ -20,4 +20,4 @@ modulate = Color(1, 0.45, 0.38, 1)
 font_size = 22
 billboard = 1
 no_depth_test = true
-text = "ENEMY SPAWN"
+text = "적 생성 지점"

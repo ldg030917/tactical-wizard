@@ -57,20 +57,20 @@ func configure(id: String, amount: int, context: String, key: String, draggable:
 		else:
 			label.text = item.display_name
 	elif context == "attachment_storage":
-		label.text = "RETURN RUNE"
+		label.text = "룬 회수"
 	elif context in ["spell_attachment", "raid_spell_attachment"]:
-		label.text = "EMPTY RUNE"
+		label.text = "빈 룬 슬롯"
 	elif context in ["spell_page", "raid_spell_page"]:
-		label.text = "EMPTY FORMULA"
+		label.text = "빈 주문식"
 	else:
-		label.text = ("EMPTY " + key.replace("_", " ").to_upper()).strip_edges()
+		label.text = "비어 있음"
 	amount_label.text = "x%d" % quantity if quantity > 1 else ""
 	icon.texture = UIIconFactory.item_icon(item_id, 96) if item != null else UIIconFactory.navigation_icon("inventory", 96)
 	tooltip_text = build_tooltip(item)
 	if item != null:
 		var primary: String = _item_primary(item)
 		base_style.border_color = ElementSystem.color(primary)
-		element_badge.text = primary.left(1).to_upper()
+		element_badge.text = {"fire":"불", "water":"물", "grass":"풀", "neutral":"중"}.get(primary, "중")
 		element_badge.modulate = ElementSystem.color(primary).lightened(0.25)
 	else:
 		element_badge.text = ""
@@ -118,19 +118,21 @@ func _is_payload_compatible(data: Variant) -> bool:
 
 func build_tooltip(item: ItemData) -> String:
 	if item == null:
-		return "Drop a compatible item here."
+		return "호환 아이템을 여기에 놓으세요."
 	if item.base_spell != null:
 		var spell := item.base_spell
 		if spell.spell_id == "explosion":
-			return "%s\nPrimary: Fire | Family: Cataclysm\nDamage 500 | Mana 100%% | Cast 1.00s\nOnce per expedition | No attachments\nDestroys forward enemies, structures, walls, and existing loot." % spell.display_name
-		return "%s\nPrimary: %s  •  Family: %s\nDamage/Power %.0f  •  Mana %.0f  •  Cast %.2fs\nRange %.1fm  •  Speed %.1fm/s  •  Status %s" % [spell.display_name, spell.primary_element.capitalize(), spell.spell_family.capitalize(), spell.base_power, spell.base_mana_cost, spell.base_cast_time_seconds, spell.base_range_meters, spell.projectile_speed_meters_per_second, spell.status_effect if not spell.status_effect.is_empty() else "None"]
+			return "%s\n주 원소: 불 | 계열: 대재앙\n피해 500 | 마나 100%% | 시전 1.00초\n원정당 1회 | 부착 룬 불가\n전방의 적, 구조물, 벽, 기존 전리품을 파괴합니다." % spell.display_name
+		return "%s\n주 원소: %s  •  계열: %s\n피해/위력 %.0f  •  마나 %.0f  •  시전 %.2f초\n사거리 %.1fm  •  속도 %.1fm/초  •  상태 %s" % [spell.display_name, KoreanLocalization.element(spell.primary_element), KoreanLocalization.family(spell.spell_family), spell.base_power, spell.base_mana_cost, spell.base_cast_time_seconds, spell.base_range_meters, spell.projectile_speed_meters_per_second, KoreanLocalization.status(spell.status_effect)]
 	if item.spell_modifier != null:
 		var modifier := item.spell_modifier
-		return "%s\n%s\nElements: %s  •  Families: %s\nDamage x%.2f  •  Mana x%.2f  •  Range x%.2f  •  Trajectory %s" % [modifier.display_name, modifier.description, ", ".join(modifier.compatible_primary_elements) if not modifier.compatible_primary_elements.is_empty() else "Any", ", ".join(modifier.compatible_spell_families) if not modifier.compatible_spell_families.is_empty() else "Any", modifier.damage_multiplier, modifier.mana_cost_multiplier, modifier.range_multiplier, modifier.trajectory_override.replace("_", " ")]
+		var elements := Array(modifier.compatible_primary_elements).map(func(value: String) -> String: return KoreanLocalization.element(value))
+		var families := Array(modifier.compatible_spell_families).map(func(value: String) -> String: return KoreanLocalization.family(value))
+		return "%s\n%s\n원소: %s  •  계열: %s\n피해 x%.2f  •  마나 x%.2f  •  사거리 x%.2f  •  궤적 %s" % [modifier.display_name, modifier.description, ", ".join(elements) if not elements.is_empty() else "모두", ", ".join(families) if not families.is_empty() else "모두", modifier.damage_multiplier, modifier.mana_cost_multiplier, modifier.range_multiplier, KoreanLocalization.trajectory(modifier.trajectory_override)]
 	if item.dagger != null:
 		var dagger := item.dagger
-		return "%s\nDamage %.0f  •  Speed %.2f/s  •  Range %.1fm\nPrimary: %s  •  Family: %s  •  Effect: %s" % [dagger.display_name, dagger.damage, dagger.attack_speed, dagger.attack_range, dagger.primary_element.capitalize(), dagger.weapon_family.capitalize(), dagger.status_effect if not dagger.status_effect.is_empty() else "None"]
-	return "%s\n%s\n%s  •  %d crowns  •  %.2fkg" % [item.display_name, item.description, item.category.replace("_", " ").capitalize(), item.value_crowns, item.weight_kg]
+		return "%s\n피해 %.0f  •  속도 %.2f/초  •  사거리 %.1fm\n주 원소: %s  •  계열: %s  •  효과: %s" % [dagger.display_name, dagger.damage, dagger.attack_speed, dagger.attack_range, KoreanLocalization.element(dagger.primary_element), KoreanLocalization.family(dagger.weapon_family), KoreanLocalization.status(dagger.status_effect)]
+	return "%s\n%s\n%s  •  %d 크라운  •  %.2fkg" % [item.display_name, item.description, KoreanLocalization.category(item.category), item.value_crowns, item.weight_kg]
 
 func _item_primary(item: ItemData) -> String:
 	if item == null:

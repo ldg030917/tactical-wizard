@@ -72,7 +72,7 @@ func _update_base_spell_hotbar() -> void:
 		var button := base_spell_buttons[index]
 		button.icon = UIIconFactory.spell_icon(spell, 96) if spell != null else UIIconFactory.icon("?", "neutral", 96)
 		button.text = str(index + 1)
-		button.tooltip_text = "%s\nMana %.0f — click the world to cast" % [spell.display_name if spell != null else "Empty", config.mana_cost if config != null else 0.0]
+		button.tooltip_text = "%s\n마나 %.0f — 지면을 클릭해 시전" % [spell.display_name if spell != null else "비어 있음", config.mana_cost if config != null else 0.0]
 		button.disabled = spell == null
 		button.modulate = Color.WHITE if player.selected_page == index else Color(0.58, 0.58, 0.66, 0.9)
 
@@ -87,7 +87,7 @@ func open_tab(tab: String) -> void:
 	if tab == "deploy":
 		_deploy()
 		return
-	base_ui.show_station(tab, "Refuge Facility")
+	base_ui.show_station(tab, "피난처 시설")
 
 func spawn_player_spell(caster: PlayerController, config: RuntimeSpellConfig, start: Vector3, direction: Vector3, target: Vector3 = Vector3.ZERO) -> SpellProjectile:
 	if config == null or config.base_spell == null or config.base_spell.projectile_scene == null:

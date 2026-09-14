@@ -24,8 +24,8 @@ size = Vector3(0.01, 0.01, 0.01)
 [node name="QuestNPC_ArchivistSable" type="Node3D"]
 script = ExtResource("1")
 station_id = "quests"
-display_name = "Archivist Sable — Expedition Keeper"
-interaction_description = "Review expeditions with"
+display_name = "원정 관리인 세이블"
+interaction_description = "원정 확인:"
 [node name="Collision" type="StaticBody3D" parent="."]
 collision_layer = 1
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Collision"]
@@ -60,7 +60,9 @@ mesh = SubResource("ModuleMesh")
 [node name="StationLabel" type="Label3D" parent="."]
 unique_name_in_owner = true
 position = Vector3(0, 2.05, 0)
-font_size = 28
+font_size = 54
+outline_size = 12
+pixel_size = 0.0015
 billboard = 1
 no_depth_test = true
-text = "Archivist Sable — Expedition Keeper"
+text = "원정 관리인 세이블"

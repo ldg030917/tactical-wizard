@@ -3,8 +3,8 @@ extends Resource
 
 @export_category("Spellbook Identity")
 @export var spellbook_id: String = "spellbook"
-@export var display_name: String = "Field Grimoire"
-@export_multiline var description: String = "A reusable platform for prepared spell pages."
+@export var display_name: String = "현장 마도서"
+@export_multiline var description: String = "준비한 주문식을 담는 재사용 마도서입니다."
 @export_enum("common", "uncommon", "rare", "epic") var rarity: String = "common"
 
 @export_category("Page Rules")

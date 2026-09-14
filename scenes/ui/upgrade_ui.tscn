@@ -2,11 +2,11 @@
 [node name="UpgradeUI" type="PanelContainer"]
 [node name="Layout" type="VBoxContainer" parent="."]
 [node name="Title" type="Label" parent="Layout"]
-text = "BASE UPGRADES"
+text = "기지 강화"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 26
 [node name="Description" type="Label" parent="Layout"]
-text = "Select a refuge facility to compare its current and next level."
+text = "피난처 시설을 선택해 현재 단계와 다음 단계를 비교하세요."
 [node name="Body" type="HSplitContainer" parent="Layout"]
 size_flags_vertical = 3
 split_offset = 410

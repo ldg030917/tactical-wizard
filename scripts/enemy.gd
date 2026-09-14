@@ -262,7 +262,7 @@ func take_damage(amount: float, source: Vector3 = Vector3.ZERO, _bleed_chance: f
 	if last_weakness_triggered:
 		var raid := _raid_scene()
 		if raid != null and raid.has_method("show_message"):
-			raid.show_message("WEAKNESS! %s defeats %s" % [attack_element.to_upper(), primary_element.to_upper()])
+			raid.show_message("약점! %s이(가) %s에 우세" % [KoreanLocalization.element(attack_element), KoreanLocalization.element(primary_element)])
 	health_bar.text = "%d / %d" % [int(ceil(health)), int(max_health)]
 	health_bar.visible = true
 	state = State.CHASE

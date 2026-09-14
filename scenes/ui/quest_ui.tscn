@@ -2,11 +2,11 @@
 [node name="QuestUI" type="PanelContainer"]
 [node name="Layout" type="VBoxContainer" parent="."]
 [node name="Title" type="Label" parent="Layout"]
-text = "Mara Quill's Contracts"
+text = "마라 퀼의 의뢰"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 26
 [node name="Dialogue" type="Label" parent="Layout"]
-text = "“The marsh keeps secrets. Bring back proof, not stories.”"
+text = "“늪은 비밀을 품고 있지. 이야기가 아니라 증거를 가져와.”"
 autowrap_mode = 2
 [node name="Scroll" type="ScrollContainer" parent="Layout"]
 size_flags_vertical = 3

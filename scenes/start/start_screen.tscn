@@ -30,7 +30,7 @@ anchors_preset = 10
 anchor_right = 1.0
 offset_top = 80.0
 offset_bottom = 156.0
-text = "ASHEN GRIMOIRE"
+text = "Tactical Wizard"
 horizontal_alignment = 1
 theme_override_colors/font_color = Color(0.92, 0.8, 1, 1)
 theme_override_font_sizes/font_size = 46
@@ -39,7 +39,7 @@ anchors_preset = 10
 anchor_right = 1.0
 offset_top = 150.0
 offset_bottom = 192.0
-text = "LOOT  •  SURVIVE  •  EXTRACT"
+text = "탐색  •  생존  •  탈출"
 horizontal_alignment = 1
 theme_override_colors/font_color = Color(0.74, 0.65, 0.8, 1)
 theme_override_font_sizes/font_size = 17
@@ -89,16 +89,16 @@ theme_override_styles/panel = SubResource("2")
 [node name="Layout" type="VBoxContainer" parent="SettingsPanel"]
 theme_override_constants/separation = 14
 [node name="Header" type="Label" parent="SettingsPanel/Layout"]
-text = "SETTINGS"
+text = "설정"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 [node name="FullscreenCheck" type="CheckButton" parent="SettingsPanel/Layout"]
 unique_name_in_owner = true
-text = "Fullscreen"
+text = "전체 화면"
 [node name="VSyncCheck" type="CheckButton" parent="SettingsPanel/Layout"]
 unique_name_in_owner = true
 button_pressed = true
-text = "VSync"
+text = "수직 동기화"
 [node name="SettingsBackButton" type="Button" parent="SettingsPanel/Layout"]
 unique_name_in_owner = true
-text = "BACK"
+text = "뒤로"

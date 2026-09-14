@@ -22,7 +22,7 @@ position = Vector3(0, 0.15, -0.7)
 mesh = SubResource("ArrowMesh")
 [node name="SpawnLabel" type="Label3D" parent="."]
 position = Vector3(0, 1.1, 0)
-font_size = 24
+font_size = 30
 billboard = 1
 no_depth_test = true
-text = "PLAYER SPAWN"
+text = "플레이어 시작 지점"

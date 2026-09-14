@@ -41,7 +41,7 @@ offset_bottom = 180.0
 [node name="Vitals" type="Label" parent="HUDRoot/TopLeft/VitalsGroup"]
 unique_name_in_owner = true
 visible = false
-text = "HP 100/100   MANA 120/120   STA 100/100   WARD 0"
+text = "체력 100/100   마나 120/120   기력 100/100   보호막 0"
 theme_override_font_sizes/font_size = 18
 
 [node name="HealthGauge" type="ProgressBar" parent="HUDRoot/TopLeft/VitalsGroup"]
@@ -69,13 +69,13 @@ modulate = Color(0.38, 0.83, 0.48, 1)
 [node name="SpellStatus" type="Label" parent="HUDRoot/TopLeft/VitalsGroup"]
 unique_name_in_owner = true
 visible = false
-text = "Ashbound Grimoire | Cinder Orb | Cost 24 | Cooldown 0.0s"
+text = "잿빛 마도서 | 잿불 구체 | 소모 24 | 재사용 0.0초"
 theme_override_font_sizes/font_size = 18
 
 [node name="SpellPages" type="Label" parent="HUDRoot/TopLeft/VitalsGroup"]
 unique_name_in_owner = true
 visible = false
-text = "[1] Cinder Orb   [2] Rime Lance   [3] Verdant Refuge   [4] Gilt Ward Dagger"
+text = "[1] 잿불 구체   [2] 서리창   [3] 초록 안식처   [4] 황금 수호단검"
 theme_override_font_sizes/font_size = 15
 
 [node name="CastProgress" type="ProgressBar" parent="HUDRoot/TopLeft/VitalsGroup"]
@@ -86,7 +86,7 @@ show_percentage = false
 
 [node name="Objective" type="Label" parent="HUDRoot/TopLeft/VitalsGroup"]
 unique_name_in_owner = true
-text = "No active expedition"
+text = "진행 중인 원정 없음"
 theme_override_font_sizes/font_size = 16
 
 [node name="StatusEffects" type="HBoxContainer" parent="HUDRoot"]
@@ -101,7 +101,7 @@ unique_name_in_owner = true
 visible = false
 modulate = Color(0.9, 0.25, 0.22, 1)
 text = "✚"
-tooltip_text = "Bleeding — use a restorative"
+tooltip_text = "출혈 — 회복약을 사용하세요"
 theme_override_font_sizes/font_size = 28
 
 [node name="ExtractionPanel" type="PanelContainer" parent="HUDRoot"]
@@ -179,7 +179,7 @@ offset_left = -260.0
 offset_top = -112.0
 offset_right = -20.0
 offset_bottom = -24.0
-text = "[F] Potion\n[G] Mana Tonic"
+text = "[F] 회복약\n[G] 마나 물약"
 horizontal_alignment = 2
 
 [node name="InventoryUI" parent="HUDRoot" instance=ExtResource("2")]
@@ -197,20 +197,20 @@ offset_bottom = 690.0
 [node name="Header" type="HBoxContainer" parent="HUDRoot/RaidSpellSettings/Layout"]
 
 [node name="Title" type="Label" parent="HUDRoot/RaidSpellSettings/Layout/Header"]
-text = "SPELL SETTINGS"
+text = "주문 설정"
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 20
 
 [node name="InventoryButton" type="Button" parent="HUDRoot/RaidSpellSettings/Layout/Header"]
 unique_name_in_owner = true
-text = "INVENTORY"
+text = "가방"
 
 [node name="CloseButton" type="Button" parent="HUDRoot/RaidSpellSettings/Layout/Header"]
 unique_name_in_owner = true
 text = "×"
 
 [node name="Note" type="Label" parent="HUDRoot/RaidSpellSettings/Layout"]
-text = "Configure pages with formulas and runes carried in the field pack."
+text = "현장 가방에 든 주문식과 룬으로 페이지를 설정합니다."
 autowrap_mode = 2
 
 [node name="PageButtons" type="HBoxContainer" parent="HUDRoot/RaidSpellSettings/Layout"]
@@ -223,7 +223,7 @@ alignment = 1
 theme_override_constants/separation = 12
 
 [node name="LibraryTitle" type="Label" parent="HUDRoot/RaidSpellSettings/Layout"]
-text = "CARRIED FORMULAS & RUNES"
+text = "보유 주문식과 룬"
 
 [node name="LibraryScroll" type="ScrollContainer" parent="HUDRoot/RaidSpellSettings/Layout"]
 size_flags_vertical = 3

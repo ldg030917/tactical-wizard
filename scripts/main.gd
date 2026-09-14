@@ -71,7 +71,7 @@ func travel_to_region(region_id: String) -> bool:
 	departing_raid.capture_region_travel_state()
 	if not GameState.enter_raid_region(region_id):
 		departing_raid.player.set_physics_process(true)
-		departing_raid.show_message("That elemental region is not connected or its entry requirement is missing.")
+		departing_raid.show_message("해당 원소 지역이 연결되지 않았거나 입장 조건을 충족하지 못했습니다.")
 		return false
 	var region := GameState.current_raid_region()
 	if region == null or region.scene == null:
@@ -85,11 +85,11 @@ func travel_to_region(region_id: String) -> bool:
 func show_end_screen(summary: Dictionary) -> void:
 	result_ui.visible = true
 	var title := result_ui.get_node("%ResultTitle") as Label
-	title.text = "EXTRACTION COMPLETE" if bool(summary.success) else "EXPEDITION LOST"
+	title.text = "탈출 완료" if bool(summary.success) else "원정 실패"
 	title.modulate = Color("7ee1b2") if bool(summary.success) else Color("e06d66")
 	var detail := result_ui.get_node("%ResultDetails") as Label
-	detail.text = "Expedition time: %s  |  Foes defeated: %d\n%s\n\n%s" % [_format_time(int(summary.duration)), int(summary.kills), "Recovered value: %d crowns" % int(summary.value) if bool(summary.success) else "Unsecured magical equipment and expedition loot were lost.", _summary_items(summary.recovered if bool(summary.success) else summary.lost)]
-	(result_ui.get_node("%QuestProgress") as Label).text = "Expedition: " + GameState.active_quest_text()
+	detail.text = "원정 시간: %s  |  처치한 적: %d\n%s\n\n%s" % [_format_time(int(summary.duration)), int(summary.kills), "회수 가치: %d 크라운" % int(summary.value) if bool(summary.success) else "보호하지 않은 마법 장비와 원정 전리품을 잃었습니다.", _summary_items(summary.recovered if bool(summary.success) else summary.lost)]
+	(result_ui.get_node("%QuestProgress") as Label).text = "원정: " + GameState.active_quest_text()
 
 func toggle_pause() -> void:
 	if result_ui.visible:
@@ -116,7 +116,7 @@ func _clear_active() -> void:
 
 func _summary_items(items: Dictionary) -> String:
 	if items.is_empty():
-		return "No items"
+		return "아이템 없음"
 	var lines: PackedStringArray = []
 	for item_id: String in items.keys():
 		lines.append("%s x%d" % [ItemDB.display_name(item_id), int(items[item_id])])

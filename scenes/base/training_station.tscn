@@ -3,6 +3,7 @@
 [ext_resource path="res://resources/upgrades/medical.tres" type="Resource" id="2"]
 [node name="TrainingStation" instance=ExtResource("1")]
 station_id = "skills"
-display_name = "Wardstone Training Ring"
-interaction_description = "Practice arcane control at"
+display_name = "수호석 훈련장"
+interaction_description = "비전 제어 훈련:"
 linked_upgrade = ExtResource("2")
+visual_kind = "training"

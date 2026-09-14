@@ -36,7 +36,7 @@ func _process(_delta: float) -> void:
 		visual.scale = Vector3(maxf(0.2, patrol_radius / 5.0), 1.0, maxf(0.2, patrol_radius / 5.0))
 	if label != null:
 		label.visible = show_debug_visual
-		label.text = "ENEMY SPAWN\n%s • Tier %d" % [spawn_id, difficulty_tier]
+		label.text = "적 생성 지점\n%s • %d단계" % [spawn_id, difficulty_tier]
 
 func spawn_enemies(parent: Node3D, rng: RandomNumberGenerator) -> Array[EnemyController]:
 	var spawned: Array[EnemyController] = []

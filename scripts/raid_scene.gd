@@ -14,7 +14,7 @@ const EXPLOSION_SCREEN_SHADER: Shader = preload("res://shaders/explosion_screen.
 
 @export_category("Elemental Region")
 @export var region_id: String = "fire_region"
-@export var region_display_name: String = "Ashen Caldera"
+@export var region_display_name: String = "잿빛 화산분지"
 @export_enum("fire", "water", "grass", "neutral") var region_primary_element: String = "fire"
 @export_enum("none", "burn_zones", "water_slow", "temporary_grass_walls") var hazard_type: String = "burn_zones"
 @export var region_tint: Color = Color("f0522d")
@@ -25,7 +25,7 @@ const EXPLOSION_SCREEN_SHADER: Shader = preload("res://shaders/explosion_screen.
 @export var boss_drop_table: LootTableData
 
 @export_category("Raid Randomization")
-@export var weather_options: Array[String] = ["Clear", "Rain haze", "Dusk"]
+@export var weather_options: Array[String] = ["맑음", "빗안개", "해질녘"]
 @export_range(5.0, 40.0, 0.5, "suffix:m") var clear_vision_radius: float = 17.0
 @export_range(5.0, 40.0, 0.5, "suffix:m") var fog_vision_radius: float = 13.5
 @export_range(5.0, 40.0, 0.5, "suffix:m") var dusk_vision_radius: float = 15.0
@@ -79,7 +79,7 @@ func _ready() -> void:
 	_spawn_editor_placed_enemies()
 	hud.configure(self, player, weather)
 	if region_id != REGION_GRAPH.ENTRY_REGION_ID:
-		hud.set_extraction_status("RETURN TO THE NEUTRAL REGION TO EXTRACT")
+		hud.set_extraction_status("탈출하려면 중립 지역으로 돌아가세요")
 
 func _configure_region() -> void:
 	var environment := world_environment.environment.duplicate() as Environment
@@ -151,7 +151,7 @@ func _configure_weather() -> void:
 	var environment := world_environment.environment.duplicate() as Environment
 	world_environment.environment = environment
 	match weather:
-		"Rain haze":
+		"빗안개":
 			environment.background_color = Color("4d5f63")
 			environment.ambient_light_color = Color("82989b")
 			environment.ambient_light_energy = 0.72
@@ -282,24 +282,24 @@ func unequip_raid_slot(slot: String) -> bool:
 
 func install_raid_modifier(page_index: int, item_id: String) -> Dictionary:
 	if page_index < 0 or page_index >= GameState.spell_pages.size():
-		return {"success":false, "message":"Invalid spell page."}
+		return {"success":false, "message":"잘못된 주문 페이지입니다."}
 	var modifier := ItemDB.modifier(item_id)
 	var spell := ItemDB.spell(str(GameState.spell_pages[page_index].get("spell_item", "")))
 	if modifier == null or not modifier.is_compatible(spell):
-		return {"success":false, "message":"That rune is incompatible with this formula."}
+		return {"success":false, "message":"이 룬은 해당 주문식과 호환되지 않습니다."}
 	var installed: Array = GameState.spell_pages[page_index].get("modifiers", [])
 	var book := GameState.equipped_spellbook()
 	if book == null or installed.size() >= book.maximum_modifiers_per_page or item_id in installed:
-		return {"success":false, "message":"No compatible open rune socket."}
+		return {"success":false, "message":"호환되는 빈 룬 슬롯이 없습니다."}
 	if not GameState.remove_raid_item(item_id, 1):
-		return {"success":false, "message":"The rune is not in the field pack."}
+		return {"success":false, "message":"해당 룬이 현장 가방에 없습니다."}
 	installed.append(item_id)
 	GameState.spell_pages[page_index].modifiers = installed
 	GameState._save_spellbook_change()
 	player._rebuild_spell_pages()
 	hud.refresh_inventory()
 	hud.refresh_spell_settings()
-	return {"success":true, "message":"Rune installed."}
+	return {"success":true, "message":"룬을 장착했습니다."}
 
 func remove_raid_modifier(page_index: int, modifier_index: int) -> bool:
 	if page_index < 0 or page_index >= GameState.spell_pages.size():
@@ -326,7 +326,7 @@ func enemy_defeated(enemy_type: String, at: Vector3) -> void:
 	var items: Dictionary = table.roll(rng) if table != null else {"arcane_dust":1}
 	var drop := enemy_drop_container_scene.instantiate() as LootContainer
 	drop.container_id = "enemy_remains"
-	drop.container_name = "%s remains" % enemy_type.capitalize()
+	drop.container_name = "%s의 잔해" % {"monster":"괴물", "mage":"마법사", "construct":"구조체", "boss":"우두머리", "scavenger":"약탈자", "creature":"야수", "guard":"경비병"}.get(enemy_type, enemy_type)
 	drop.search_duration = 0.25
 	drop.set_preset_loot(items)
 	runtime_actors.add_child(drop)
@@ -411,7 +411,7 @@ func cast_special_spell(caster: PlayerController, config: RuntimeSpellConfig, st
 
 func play_explosion_sequence(caster: PlayerController) -> bool:
 	if caster == null or not is_instance_valid(caster) or not GameState.consume_explosion_use():
-		show_message("Explosion has already been consumed during this expedition.")
+		show_message("이번 원정에서는 이미 대폭발을 사용했습니다.")
 		return false
 	var cutscene_layer := CanvasLayer.new()
 	cutscene_layer.name = "ExplosionCutscene"
@@ -486,7 +486,7 @@ func apply_explosion_effects(caster: PlayerController) -> Dictionary:
 		var angle: float = TAU * float(ring_index) / 20.0
 		var distance: float = 3.0 + float(ring_index % 5) * 3.8
 		spawn_spell_impact(caster.global_position + Vector3(cos(angle), 0.25, sin(angle)) * distance, Color("ff3208"), 2.4 + float(ring_index % 4), "fire", float(ring_index) * 1.7)
-	show_message("EXPLOSION - the region is devastated. You are exhausted.")
+	show_message("대폭발 — 지역이 초토화되었습니다. 탈진 상태입니다.")
 	return result
 
 func _spawn_fullscreen_explosion() -> void:
@@ -672,7 +672,7 @@ func on_player_died() -> void:
 	if raid_complete:
 		return
 	raid_complete = true
-	hud.set_extraction_status("YOUR SPELLBOOK FALLS SILENT")
+	hud.set_extraction_status("마도서가 침묵합니다")
 	await get_tree().create_timer(1.2).timeout
 	var summary: Dictionary = GameState.finish_raid(false, kills)
 	var main: Node = get_tree().current_scene
