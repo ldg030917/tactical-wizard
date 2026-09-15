@@ -28,6 +28,9 @@ var ping_ms := -1
 var _ping_elapsed := 0.0
 var connected_peer_ids: Dictionary = {}
 var peer_raid_states: Dictionary = {}
+## Server-owned lobby selections. RaidScene reads this only on the server when
+## constructing a Player for a peer; cast RPCs never carry a spell identifier.
+var peer_loadouts: Dictionary = {}
 var client_raid_session_id := ""
 
 
@@ -114,6 +117,7 @@ func is_network_game() -> bool:
 
 func request_matchmaking() -> void:
 	if is_connected_to_server():
+		submit_local_loadout()
 		_request_matchmaking.rpc_id(1)
 
 
@@ -124,7 +128,29 @@ func cancel_matchmaking() -> void:
 
 func request_test_raid() -> void:
 	if is_connected_to_server():
+		submit_local_loadout()
 		_request_test_raid.rpc_id(1)
+
+
+func submit_local_loadout() -> void:
+	if not is_connected_to_server():
+		return
+	var loadout := GameState.loadout.duplicate(true)
+	if str(loadout.get("spellbook", "")).is_empty():
+		loadout["spellbook"] = "apprentice_grimoire"
+	if str(loadout.get("focus", "")).is_empty():
+		loadout["focus"] = "apprentice_wand"
+	if str(loadout.get("dagger", "")).is_empty():
+		loadout["dagger"] = "neutral_dagger"
+	_submit_loadout.rpc_id(1, {
+		"loadout": loadout,
+		"spell_pages": GameState.spell_pages.duplicate(true),
+		"selected_character_id": GameState.selected_character_id
+	})
+
+
+func get_peer_loadout(peer_id: int) -> Dictionary:
+	return peer_loadouts.get(peer_id, {}).duplicate(true)
 
 
 ## Compatibility entry point for existing deployment station interactions.
@@ -165,6 +191,9 @@ func server_complete_raid_extraction(peer_id: int, success: bool = true) -> void
 
 func _queue_peer(peer_id: int) -> void:
 	if not connected_peer_ids.has(peer_id) or int(peer_raid_states.get(peer_id, PeerRaidState.DISCONNECTED)) != PeerRaidState.MULTIPLAYER_LOBBY:
+		return
+	if not peer_loadouts.has(peer_id):
+		_send_matchmaking_status(peer_id, "LOADOUT SYNCING")
 		return
 	if MatchmakingManager.contains(peer_id):
 		_send_matchmaking_status(peer_id, "MATCHMAKING  %d / %d" % [MatchmakingManager.size(), MatchmakingManager.MAX_MATCH_PLAYERS])
@@ -273,6 +302,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	var session_id := get_peer_session_id(peer_id)
 	_cancel_queued_peer(peer_id, "disconnected")
 	connected_peer_ids.erase(peer_id)
+	peer_loadouts.erase(peer_id)
 	if not session_id.is_empty():
 		print("[RAID %s] disconnected peer=%d" % [session_id, peer_id])
 		SessionManager.remove_player(peer_id, "disconnected")
@@ -284,6 +314,7 @@ func _on_connected_to_server() -> void:
 	is_connecting = false
 	connection_status_changed.emit("Connected to server.")
 	session_state_changed.emit("ONLINE")
+	submit_local_loadout()
 	client_connected.emit()
 
 
@@ -307,6 +338,56 @@ func _on_server_disconnected() -> void:
 func _request_matchmaking() -> void:
 	if multiplayer.is_server():
 		_queue_peer(multiplayer.get_remote_sender_id())
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _submit_loadout(snapshot: Dictionary) -> void:
+	if not multiplayer.is_server():
+		return
+	var peer_id := multiplayer.get_remote_sender_id()
+	if not connected_peer_ids.has(peer_id):
+		return
+	var normalized := _normalize_loadout_snapshot(snapshot)
+	if normalized.is_empty():
+		print("[LOADOUT] rejected peer=%d" % peer_id)
+		return
+	peer_loadouts[peer_id] = normalized
+	print("[LOADOUT] accepted peer=%d pages=%s" % [peer_id, str(normalized.spell_pages)])
+
+
+func _normalize_loadout_snapshot(snapshot: Dictionary) -> Dictionary:
+	var raw_loadout: Variant = snapshot.get("loadout", {})
+	var raw_pages: Variant = snapshot.get("spell_pages", [])
+	if not raw_loadout is Dictionary or not raw_pages is Array or raw_pages.size() != 3:
+		return {}
+	var loadout: Dictionary = raw_loadout.duplicate(true)
+	for slot: String in ["spellbook", "focus", "dagger", "head", "chest", "accessory_1", "accessory_2", "backpack", "consumable_1", "consumable_2"]:
+		if not loadout.has(slot):
+			loadout[slot] = ""
+	var pages: Array = []
+	var book := ItemDB.spellbook(str(loadout.get("spellbook", "")))
+	for raw_page: Variant in raw_pages:
+		if not raw_page is Dictionary:
+			return {}
+		var page: Dictionary = raw_page
+		var spell_id := str(page.get("spell_item", ""))
+		var spell := ItemDB.spell(spell_id)
+		if spell == null:
+			return {}
+		var modifiers: Array = []
+		for raw_modifier: Variant in page.get("modifiers", []):
+			var modifier_id := str(raw_modifier)
+			var modifier := ItemDB.modifier(modifier_id)
+			if modifier == null or not modifier.is_compatible(spell):
+				return {}
+			modifiers.append(modifier_id)
+		if book == null or modifiers.size() > book.maximum_modifiers_per_page:
+			return {}
+		pages.append({"spell_item": spell_id, "modifiers": modifiers})
+	var character_id := str(snapshot.get("selected_character_id", "mana_specialist"))
+	if not ContentRegistry.characters().has(character_id):
+		return {}
+	return {"loadout": loadout, "spell_pages": pages, "selected_character_id": character_id}
 
 
 @rpc("any_peer", "call_remote", "reliable")

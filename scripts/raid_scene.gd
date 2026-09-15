@@ -118,9 +118,10 @@ func spawn_network_raid_member(peer_id: int) -> void:
 	_sync_network_world_to_peer(peer_id)
 	var offset_index := network_players.size()
 	var spawn_position := player_spawn.global_position + Vector3(float(offset_index % 3) * 1.25, 0.0, float(offset_index / 3) * 1.25)
-	_create_network_raid_player(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
+	var loadout_snapshot := NetworkManager.get_peer_loadout(peer_id)
+	_create_network_raid_player(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees), loadout_snapshot)
 	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
-		spawn_network_raid_player.rpc_id(target_peer, peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
+		spawn_network_raid_player.rpc_id(target_peer, peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees), loadout_snapshot)
 	print("[PLAYER %s] spawn peer=%d players=%s" % [raid_session_id, peer_id, str(network_players.keys())])
 
 
@@ -128,7 +129,7 @@ func _sync_network_world_to_peer(peer_id: int) -> void:
 	for existing_peer: int in network_players:
 		var existing_player := network_players[existing_peer] as PlayerController
 		if is_instance_valid(existing_player):
-			spawn_network_raid_player.rpc_id(peer_id, existing_peer, existing_player.global_position, existing_player.rotation.y)
+			spawn_network_raid_player.rpc_id(peer_id, existing_peer, existing_player.global_position, existing_player.rotation.y, NetworkManager.get_peer_loadout(existing_peer))
 	for enemy_id: String in network_enemies:
 		var enemy := network_enemies[enemy_id] as EnemyController
 		if is_instance_valid(enemy):
@@ -190,14 +191,14 @@ func _process_network_raid(delta: float) -> void:
 		receive_network_projectile_snapshots.rpc_id(target_peer, projectile_states)
 
 
-func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> PlayerController:
+func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float, loadout_snapshot: Dictionary = {}) -> PlayerController:
 	if network_players.has(peer_id):
 		print("[PLAYER] Duplicate spawn ignored peer=%d" % peer_id)
 		return network_players[peer_id] as PlayerController
 	var network_player := player_scene.instantiate() as PlayerController
 	network_player.name = "Player_%d" % peer_id
 	network_player.in_raid = true
-	network_player.configure_network(peer_id)
+	network_player.configure_network(peer_id, loadout_snapshot)
 	runtime_actors.add_child(network_player)
 	network_player.global_position = spawn_position
 	network_player.rotation.y = spawn_rotation_y
@@ -438,9 +439,9 @@ func _network_loot_item_granted(loot_id: String, item_id: String) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func spawn_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> void:
+func spawn_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float, loadout_snapshot: Dictionary) -> void:
 	if not multiplayer.is_server():
-		_create_network_raid_player(peer_id, spawn_position, spawn_rotation_y)
+		_create_network_raid_player(peer_id, spawn_position, spawn_rotation_y, loadout_snapshot)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -837,8 +838,13 @@ func spawn_enemy_spell(caster: EnemyController, spell: BaseSpellData, start: Vec
 	var projectile := spell.projectile_scene.instantiate() as SpellProjectile
 	temporary_effects.add_child(projectile)
 	projectile.global_position = start
-	var direction: Vector3 = target + Vector3(0, 0.8, 0) - start
-	direction.y = 0.0
+	# Enemy casts target the authoritative Player body position directly. Do not
+	# flatten the direction: that made the visual path terminate in front of a
+	# raised cast origin instead of at the selected Player.
+	var direction: Vector3 = target - start
+	if direction.length_squared() < 0.001:
+		return null
+	print("[ENEMY_TARGET] enemy=%s peer=%d target_pos=%s cast_origin=%s" % [caster.network_enemy_id, caster.player.network_peer_id if caster.player != null else -1, str(target), str(start)])
 	projectile.configure(caster, config, direction.normalized(), "enemy", target)
 	if NetworkManager.is_network_game() and multiplayer.is_server():
 		_register_network_projectile(projectile, config, start, direction.normalized(), "enemy", target, "enemy:%s" % caster.network_enemy_id)

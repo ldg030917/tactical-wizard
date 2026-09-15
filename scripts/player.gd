@@ -13,12 +13,16 @@ signal injury_changed(body_part: String, severity: float)
 ## Set by the authoritative world before the node enters the scene tree.
 var network_enabled := false
 var network_peer_id := 1
+var authoritative_loadout: Dictionary = {}
+var authoritative_spell_pages: Array = []
+var authoritative_character_id := ""
 var _network_move_input := Vector2.ZERO
 var _network_sprint := false
 var _network_crouch := false
 var _network_focus := false
 var _network_rotation_y := 0.0
 var _network_send_elapsed := 0.0
+var _network_input_blocked := false
 var _snapshot_buffer: Array[Dictionary] = []
 
 @export_category("Movement")
@@ -135,7 +139,7 @@ func _ready() -> void:
 	max_health = base_max_health + GameState.skill_bonus("health")
 	max_mana = base_max_mana
 	max_stamina = base_max_stamina + GameState.skill_bonus("stamina")
-	var character := GameState.selected_character()
+	var character := _selected_character()
 	if character != null:
 		max_health *= character.health_multiplier
 		max_mana *= character.mana_multiplier
@@ -165,9 +169,39 @@ func _ready() -> void:
 		_configure_network_presentation()
 
 
-func configure_network(peer_id: int) -> void:
+func configure_network(peer_id: int, loadout_snapshot: Dictionary = {}) -> void:
 	network_enabled = true
 	network_peer_id = peer_id
+	authoritative_loadout = loadout_snapshot.get("loadout", {}).duplicate(true)
+	authoritative_spell_pages = loadout_snapshot.get("spell_pages", []).duplicate(true)
+	authoritative_character_id = str(loadout_snapshot.get("selected_character_id", ""))
+
+
+func _loadout() -> Dictionary:
+	return authoritative_loadout if not authoritative_loadout.is_empty() else GameState.loadout
+
+
+func _spell_pages() -> Array:
+	return authoritative_spell_pages if not authoritative_spell_pages.is_empty() else GameState.spell_pages
+
+
+func _selected_character() -> CharacterData:
+	var character_id := authoritative_character_id if not authoritative_character_id.is_empty() else GameState.selected_character_id
+	return ContentRegistry.characters().get(character_id) as CharacterData
+
+
+func _spell_config_for_page(page_index: int) -> RuntimeSpellConfig:
+	var pages := _spell_pages()
+	if page_index < 0 or page_index >= pages.size():
+		return null
+	var page: Dictionary = pages[page_index]
+	var spell := ItemDB.spell(str(page.get("spell_item", "")))
+	var modifiers: Array[SpellModifierData] = []
+	for modifier_id: Variant in page.get("modifiers", []):
+		var modifier := ItemDB.modifier(str(modifier_id))
+		if modifier != null:
+			modifiers.append(modifier)
+	return RuntimeSpellConfig.build(spell, modifiers, ItemDB.spellbook(str(_loadout().get("spellbook", ""))), ItemDB.focus(str(_loadout().get("focus", ""))), true)
 
 
 func is_local_network_player() -> bool:
@@ -195,7 +229,7 @@ func _initialize_local_network_player() -> void:
 	_network_aim_initialized = true
 	_initialize_virtual_aim_cursor()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	print("[AIM] local player initialized peer=%d snapshot_rotation_applied=false" % network_peer_id)
+	print("[CAMERA] local_peer=%d player_peer=%d camera_current=%s" % [multiplayer.get_unique_id(), network_peer_id, str(camera.current)])
 
 
 func _initialize_remote_network_player() -> void:
@@ -206,7 +240,7 @@ func _initialize_remote_network_player() -> void:
 	if multiplayer.is_server():
 		visual.visible = false
 	else:
-		print("[AIM] remote player initialized peer=%d snapshot_rotation_applied=true" % network_peer_id)
+		print("[CAMERA] local_peer=%d player_peer=%d camera_current=%s" % [multiplayer.get_unique_id(), network_peer_id, str(camera.current)])
 
 func _physics_process(delta: float) -> void:
 	if network_enabled:
@@ -281,7 +315,13 @@ func _network_physics_process(delta: float) -> void:
 			return
 		if _is_free_aim_ui_blocked():
 			velocity = Vector3.ZERO
+			# The server retains the last movement packet. Send one explicit neutral
+			# input when a local menu opens so gameplay really stops with mouse-look.
+			if not _network_input_blocked:
+				_network_input_blocked = true
+				submit_movement_input.rpc_id(1, Vector2.ZERO, rotation.y, _network_aim_pitch, false, false, false)
 			return
+		_network_input_blocked = false
 		# Smooth the local cooldown UI between authoritative snapshots.
 		_tick_combat_cooldowns(delta)
 		_update_free_aim_turn(delta)
@@ -467,7 +507,7 @@ func _configure_equipment_stats() -> void:
 	elemental_resistances = {"fire":0.0, "water":0.0, "grass":0.0, "neutral":0.0}
 	var regen_multiplier: float = 1.0
 	for slot: String in ["head", "chest", "accessory_1", "accessory_2"]:
-		var info: Dictionary = ItemDB.get_item(str(GameState.loadout.get(slot, "")))
+		var info: Dictionary = ItemDB.get_item(str(_loadout().get(slot, "")))
 		armor += float(info.get("armor", 0.0))
 		elemental_resistances.fire += float(info.get("fire_resist", 0.0))
 		elemental_resistances.water += float(info.get("ice_resist", 0.0))
@@ -481,7 +521,7 @@ func _configure_equipment_stats() -> void:
 func _rebuild_spell_pages() -> void:
 	page_configs.clear()
 	for index: int in range(3):
-		page_configs.append(GameState.spell_config(index))
+		page_configs.append(_spell_config_for_page(index))
 	if selected_page >= page_configs.size():
 		selected_page = 0
 	_update_preview()
@@ -507,7 +547,7 @@ func select_combat_slot(slot_index: int) -> void:
 	_update_preview()
 
 func equipped_dagger() -> DaggerData:
-	return ItemDB.dagger(str(GameState.loadout.get("dagger", "")))
+	return ItemDB.dagger(str(_loadout().get("dagger", "")))
 
 func current_primary_element() -> String:
 	if active_combat_slot == 3:
@@ -526,7 +566,7 @@ func current_spell_name() -> String:
 	return config.base_spell.display_name if config != null and config.valid else "빈 페이지"
 
 func current_spellbook_name() -> String:
-	var book: SpellbookData = GameState.equipped_spellbook()
+	var book: SpellbookData = ItemDB.spellbook(str(_loadout().get("spellbook", "")))
 	return book.display_name if book != null else "마도서 없음"
 
 func cooldown_remaining() -> float:

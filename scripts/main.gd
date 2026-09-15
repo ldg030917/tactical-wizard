@@ -168,6 +168,8 @@ func _start_test_raid() -> void:
 
 func _start_raid_scene(session_id: String = "") -> void:
 	session_phase = SessionPhase.LOADING_RAID
+	local_menu_open = false
+	pause_menu.visible = false
 	matchmaking_panel.visible = false
 	if not GameState.begin_raid():
 		return
@@ -180,6 +182,8 @@ func _start_raid_scene(session_id: String = "") -> void:
 		(active_area as RaidScene).raid_session_id = session_id
 	world_container.add_child(active_area)
 	session_phase = SessionPhase.IN_RAID
+	if NetworkManager.is_connected_to_server():
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 func _on_server_raid_session_world_requested(session_id: String) -> void:
@@ -270,6 +274,7 @@ func toggle_pause() -> void:
 		local_menu_open = not local_menu_open
 		pause_menu.visible = local_menu_open
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if local_menu_open else Input.MOUSE_MODE_CAPTURED
+		print("[INPUT] peer=%d menu_open=%s mouse_mode=%s" % [multiplayer.get_unique_id(), str(local_menu_open), str(Input.mouse_mode)])
 		return
 	get_tree().paused = not get_tree().paused
 	pause_menu.visible = get_tree().paused
