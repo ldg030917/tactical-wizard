@@ -152,10 +152,14 @@ func _ready() -> void:
 		GameState.spellbook_changed.connect(_rebuild_spell_pages)
 	wand_socket_base_position = wand_socket.position
 	camera.top_level = true
-	camera.current = true
-	camera.global_position = global_position + Vector3(0, camera_height, camera_distance)
-	camera.look_at(global_position + Vector3(0, 0.5, 0))
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	# Network replicas must never briefly claim the viewport camera while their
+	# local/remote role is being configured. That race left late-joining clients
+	# looking at the fixed spawn camera instead of their own player.
+	camera.current = not network_enabled
+	if not network_enabled:
+		camera.global_position = global_position + Vector3(0, camera_height, camera_distance)
+		camera.look_at(global_position + Vector3(0, 0.5, 0))
+		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	if network_enabled:
 		set_multiplayer_authority(network_peer_id)
 		_configure_network_presentation()
@@ -184,6 +188,8 @@ func _initialize_local_network_player() -> void:
 	# configure_network() runs before add_child(), so this decision is valid in
 	# _ready() for both the first and a late-joining Raid player.
 	camera.current = true
+	camera.global_position = global_position + Vector3(0, camera_height, camera_distance)
+	camera.look_at(global_position + Vector3(0, 0.5, 0))
 	set_process_unhandled_input(true)
 	_network_aim_yaw = rotation.y
 	_network_aim_initialized = true
@@ -282,6 +288,7 @@ func _network_physics_process(delta: float) -> void:
 		_update_aim()
 		_update_movement(delta) # local prediction; server snapshots reconcile it.
 		_update_camera(delta)
+		_update_interaction()
 		_update_visuals(delta)
 		_network_send_elapsed += delta
 		if _network_send_elapsed >= 1.0 / 30.0:
@@ -294,6 +301,13 @@ func _network_physics_process(delta: float) -> void:
 
 func _handle_network_input(event: InputEvent) -> void:
 	if dead or not is_local_network_player():
+		return
+	# Escape must remain usable while the local pause menu is open; checking the
+	# UI gate first made the second Escape impossible to process.
+	if event.is_action_pressed("pause_game"):
+		var root: Node = get_tree().current_scene
+		if root.has_method("toggle_pause"):
+			root.toggle_pause()
 		return
 	if _is_free_aim_ui_blocked():
 		return
@@ -323,10 +337,12 @@ func _handle_network_input(event: InputEvent) -> void:
 		var raid: Node = _gameplay_area()
 		if raid.has_method("toggle_inventory"):
 			raid.toggle_inventory()
-	elif event.is_action_pressed("pause_game"):
-		var root: Node = get_tree().current_scene
-		if root.has_method("toggle_pause"):
-			root.toggle_pause()
+	elif event.is_action_pressed("interact"):
+		_interact()
+	elif (event.is_action_pressed("heal") or event.is_action_pressed("quick_item_1")) and in_raid:
+		quick_heal()
+	elif event.is_action_pressed("quick_item_2") and in_raid:
+		use_mana_consumable()
 
 
 @rpc("any_peer", "call_remote", "unreliable", 1)
@@ -1132,6 +1148,11 @@ func _interact() -> void:
 			if distance < best_distance:
 				best_distance = distance
 				closest = node as Node3D
+	if network_enabled and is_local_network_player() and closest is LootContainer:
+		var raid: Node = _gameplay_area()
+		if raid.has_method("request_network_loot_open"):
+			raid.request_network_loot_open(closest as LootContainer)
+		return
 	if closest != null and closest.has_method("interact"):
 		closest.interact(self)
 

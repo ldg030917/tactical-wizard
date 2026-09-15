@@ -436,6 +436,9 @@ func _discard_item(item_id: String) -> void:
 func _take_loot(item_id: String) -> void:
 	if selected_container == null:
 		return
+	if not selected_container.network_loot_id.is_empty() and raid != null and raid.has_method("request_network_loot_take"):
+		raid.request_network_loot_take(selected_container, item_id)
+		return
 	if not selected_container.take_item(item_id):
 		show_message("현장 가방이 가득 찼습니다. 먼저 아이템을 버리거나 보호하세요.")
 	refresh_loot()

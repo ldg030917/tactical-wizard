@@ -34,6 +34,8 @@ var required_item: String:
 		required_item_override = value
 
 var contents: Dictionary = {}
+## Set by RaidScene for replicated containers. Empty for the standalone/solo path.
+var network_loot_id := ""
 var generated: bool = false
 var searched: bool = false
 var searching: bool = false
@@ -67,7 +69,7 @@ func get_interaction_text(_player: PlayerController) -> String:
 		return "%s (비어 있음)" % container_name
 	return "%s: %s" % [interaction_text, container_name]
 
-func interact(_player: PlayerController) -> void:
+func interact(_player: PlayerController, show_local_ui: bool = true) -> void:
 	if searching:
 		return
 	if starts_locked and required_item.is_empty():
@@ -94,7 +96,7 @@ func interact(_player: PlayerController) -> void:
 	status_label.text = searched_label_text if not contents.is_empty() else "비어 있음"
 	search_completed.emit(self)
 	var raid: Node = _raid_scene()
-	if raid.has_method("show_loot"):
+	if show_local_ui and raid.has_method("show_loot"):
 		raid.show_loot(self)
 
 func generate_loot() -> void:

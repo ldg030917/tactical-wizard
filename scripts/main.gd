@@ -67,7 +67,7 @@ func _ready() -> void:
 	NetworkManager.ping_updated.connect(_on_ping_updated)
 	NetworkManager.matchmaking_status_changed.connect(_on_matchmaking_status_changed)
 	NetworkManager.load_raid_requested.connect(_on_client_load_raid_requested)
-	NetworkManager.return_to_lobby_requested.connect(_on_client_return_to_lobby_requested)
+	NetworkManager.raid_completed.connect(_on_client_raid_completed)
 	(result_ui.get_node("%ReturnButton") as Button).pressed.connect(_return_from_result)
 	(pause_menu.get_node("%ResumeButton") as Button).pressed.connect(toggle_pause)
 	pause_menu.get_node("Panel/Layout/ReturnButton").pressed.connect(_abandon_to_base)
@@ -210,13 +210,19 @@ func _on_server_raid_session_clients_ready(session_id: String, members: Array[in
 
 func _on_server_raid_extraction_requested(peer_id: int, extraction_name: String, session_id: String) -> void:
 	if active_area is RaidScene and (active_area as RaidScene).raid_session_id == session_id:
-		if (active_area as RaidScene).extract_network_player(peer_id, extraction_name):
-			NetworkManager.server_complete_raid_extraction(peer_id)
+		var raid := active_area as RaidScene
+		var success := extraction_name != "abandoned"
+		if raid.extract_network_player(peer_id, extraction_name):
+			NetworkManager.server_complete_raid_extraction(peer_id, success)
 
 
-func _on_client_return_to_lobby_requested() -> void:
-	print("[LOBBY] Returning multiplayer peer=%d" % multiplayer.get_unique_id())
-	show_base()
+func _on_client_raid_completed(success: bool) -> void:
+	local_menu_open = false
+	pause_menu.visible = false
+	get_tree().paused = false
+	if active_area is RaidScene:
+		var summary: Dictionary = GameState.finish_raid(success, (active_area as RaidScene).kills)
+		show_end_screen(summary)
 
 
 func _on_matchmaking_status_changed(message: String) -> void:
@@ -246,6 +252,9 @@ func travel_to_region(region_id: String) -> bool:
 	return true
 
 func show_end_screen(summary: Dictionary) -> void:
+	local_menu_open = false
+	pause_menu.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	result_ui.visible = true
 	var title := result_ui.get_node("%ResultTitle") as Label
 	title.text = "탈출 완료" if bool(summary.success) else "원정 실패"

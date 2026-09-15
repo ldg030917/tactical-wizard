@@ -13,7 +13,7 @@ signal raid_session_world_requested(session_id: String)
 signal load_raid_requested(session_id: String)
 signal raid_session_clients_ready(session_id: String, members: Array[int])
 signal raid_extraction_requested(peer_id: int, extraction_name: String, session_id: String)
-signal return_to_lobby_requested
+signal raid_completed(success: bool)
 
 const DEFAULT_PORT := 7000
 const DEFAULT_SERVER_ADDRESS := "158.180.84.54"
@@ -150,16 +150,16 @@ func get_peer_session_id(peer_id: int) -> String:
 	return SessionManager.get_player_session(peer_id)
 
 
-func server_complete_raid_extraction(peer_id: int) -> void:
+func server_complete_raid_extraction(peer_id: int, success: bool = true) -> void:
 	if not multiplayer.is_server():
 		return
 	var session_id := get_peer_session_id(peer_id)
 	if session_id.is_empty():
 		return
-	print("[RAID %s] extracted peer=%d" % [session_id, peer_id])
+	print("[RAID %s] completed peer=%d success=%s" % [session_id, peer_id, str(success)])
 	SessionManager.remove_player(peer_id, "extracted")
 	peer_raid_states[peer_id] = PeerRaidState.RETURNING_TO_LOBBY
-	_load_lobby_on_client.rpc_id(peer_id)
+	_raid_completed_on_client.rpc_id(peer_id, success)
 	peer_raid_states[peer_id] = PeerRaidState.MULTIPLAYER_LOBBY
 
 
@@ -354,10 +354,10 @@ func _request_raid_extraction(extraction_name: String) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func _load_lobby_on_client() -> void:
+func _raid_completed_on_client(success: bool) -> void:
 	if is_connected_to_server():
 		client_raid_session_id = ""
-		return_to_lobby_requested.emit()
+		raid_completed.emit(success)
 
 
 @rpc("authority", "call_remote", "reliable")

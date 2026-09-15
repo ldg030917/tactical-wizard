@@ -60,6 +60,7 @@ var grass_wall_generation: int = 0
 var explosion_devastated: bool = false
 var network_players: Dictionary = {}
 var network_enemies: Dictionary = {}
+var network_loot_containers: Dictionary = {}
 var network_projectiles: Dictionary = {}
 var network_projectile_spawn_data: Dictionary = {}
 var network_snapshot_elapsed := 0.0
@@ -69,6 +70,7 @@ var network_raid_active := false
 var raid_session_id := ""
 var _next_network_enemy_id := 1
 var _next_network_magic_id := 1
+var _next_network_loot_id := 1
 
 const GRASS_WALL_PLACEMENTS: Array[Dictionary] = [
 	{"position":Vector3(-12, 1.4, -4), "rotation":0.0},
@@ -103,6 +105,7 @@ func _setup_network_raid() -> void:
 	if multiplayer.is_server():
 		multiplayer.peer_disconnected.connect(_on_network_raid_peer_disconnected)
 		_spawn_editor_placed_loot()
+		_register_network_loot_containers()
 		_spawn_editor_placed_enemies()
 
 
@@ -130,6 +133,10 @@ func _sync_network_world_to_peer(peer_id: int) -> void:
 		var enemy := network_enemies[enemy_id] as EnemyController
 		if is_instance_valid(enemy):
 			spawn_network_enemy.rpc_id(peer_id, _network_enemy_spawn_data(enemy))
+	for loot_id: String in network_loot_containers:
+		var container := network_loot_containers[loot_id] as LootContainer
+		if is_instance_valid(container):
+			spawn_network_loot.rpc_id(peer_id, _network_loot_spawn_data(container))
 	for magic_id: String in network_projectile_spawn_data:
 		var projectile_ref: Variant = network_projectiles.get(magic_id)
 		if is_instance_valid(projectile_ref):
@@ -219,6 +226,37 @@ func _network_enemy_spawn_data(enemy: EnemyController) -> Dictionary:
 	}
 
 
+func _register_network_loot_containers() -> void:
+	if not multiplayer.is_server():
+		return
+	for child: Node in loot_containers.get_children():
+		if not child is LootContainer:
+			continue
+		_register_network_loot_container(child as LootContainer)
+
+
+func _register_network_loot_container(container: LootContainer) -> void:
+	if not multiplayer.is_server() or container == null:
+		return
+	if container.network_loot_id.is_empty():
+		container.network_loot_id = "loot_%d" % _next_network_loot_id
+		_next_network_loot_id += 1
+	network_loot_containers[container.network_loot_id] = container
+	for peer_id: int in NetworkManager.get_session_members(raid_session_id):
+		spawn_network_loot.rpc_id(peer_id, _network_loot_spawn_data(container))
+
+
+func _network_loot_spawn_data(container: LootContainer) -> Dictionary:
+	return {
+		"loot_id": container.network_loot_id,
+		"scene_path": container.scene_file_path,
+		"container_id": container.container_id,
+		"container_name": container.container_name,
+		"position": container.global_position,
+		"rotation_y": container.rotation.y
+	}
+
+
 func _register_network_enemy(enemy: EnemyController) -> void:
 	if not multiplayer.is_server() or enemy == null:
 		return
@@ -301,6 +339,102 @@ func _on_network_raid_peer_disconnected(peer_id: int) -> void:
 		network_player.queue_free()
 	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
 		remove_network_raid_player.rpc_id(target_peer, peer_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func spawn_network_loot(spawn_data: Dictionary) -> void:
+	if multiplayer.is_server():
+		return
+	var loot_id := str(spawn_data.get("loot_id", ""))
+	if loot_id.is_empty() or network_loot_containers.has(loot_id):
+		return
+	var scene := load(str(spawn_data.get("scene_path", ""))) as PackedScene
+	if scene == null:
+		push_error("[LOOT] replication failed id=%s" % loot_id)
+		return
+	var container := scene.instantiate() as LootContainer
+	if container == null:
+		return
+	container.network_loot_id = loot_id
+	container.container_id = str(spawn_data.get("container_id", container.container_id))
+	container.container_name = str(spawn_data.get("container_name", container.container_name))
+	loot_containers.add_child(container)
+	container.global_position = spawn_data.get("position", Vector3.ZERO)
+	container.rotation.y = float(spawn_data.get("rotation_y", 0.0))
+	network_loot_containers[loot_id] = container
+
+
+func request_network_loot_open(container: LootContainer) -> void:
+	if NetworkManager.is_connected_to_server() and container != null and not container.network_loot_id.is_empty():
+		_request_network_loot_open.rpc_id(1, container.network_loot_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_network_loot_open(loot_id: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var peer_id := multiplayer.get_remote_sender_id()
+	var network_player := network_players.get(peer_id) as PlayerController
+	var container := network_loot_containers.get(loot_id) as LootContainer
+	if not is_instance_valid(network_player) or not is_instance_valid(container):
+		return
+	if network_player.global_position.distance_to(container.global_position) > 2.5:
+		return
+	await container.interact(network_player, false)
+	_send_network_loot_state(peer_id, container)
+
+
+func request_network_loot_take(container: LootContainer, item_id: String) -> void:
+	if NetworkManager.is_connected_to_server() and container != null and not container.network_loot_id.is_empty():
+		_request_network_loot_take.rpc_id(1, container.network_loot_id, item_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_network_loot_take(loot_id: String, item_id: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var peer_id := multiplayer.get_remote_sender_id()
+	var network_player := network_players.get(peer_id) as PlayerController
+	var container := network_loot_containers.get(loot_id) as LootContainer
+	if not is_instance_valid(network_player) or not is_instance_valid(container):
+		return
+	if network_player.global_position.distance_to(container.global_position) > 2.5 or int(container.contents.get(item_id, 0)) <= 0:
+		return
+	container.contents[item_id] = int(container.contents[item_id]) - 1
+	if int(container.contents[item_id]) <= 0:
+		container.contents.erase(item_id)
+	_network_loot_item_granted.rpc_id(peer_id, loot_id, item_id)
+	_send_network_loot_state(peer_id, container)
+
+
+func _send_network_loot_state(peer_id: int, container: LootContainer) -> void:
+	_network_loot_opened.rpc_id(peer_id, container.network_loot_id, container.container_name, container.contents.duplicate(true))
+
+
+@rpc("authority", "call_remote", "reliable")
+func _network_loot_opened(loot_id: String, container_name: String, contents: Dictionary) -> void:
+	if multiplayer.is_server():
+		return
+	var container := network_loot_containers.get(loot_id) as LootContainer
+	if not is_instance_valid(container):
+		return
+	container.container_name = container_name
+	container.contents = contents.duplicate(true)
+	container.generated = true
+	container.searched = true
+	show_loot(container)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _network_loot_item_granted(loot_id: String, item_id: String) -> void:
+	if multiplayer.is_server():
+		return
+	if not GameState.add_raid_item(item_id, 1):
+		show_message("현장 가방이 가득 찼습니다.")
+		return
+	var container := network_loot_containers.get(loot_id) as LootContainer
+	if is_instance_valid(container):
+		container.item_taken.emit(item_id, 1)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -674,6 +808,8 @@ func enemy_defeated(enemy_type: String, at: Vector3) -> void:
 	drop.set_preset_loot(items)
 	runtime_actors.add_child(drop)
 	drop.global_position = at
+	if NetworkManager.is_network_game() and multiplayer.is_server():
+		_register_network_loot_container(drop)
 
 func notify_spell_cast(position: Vector3, radius: float) -> void:
 	for node: Node in get_tree().get_nodes_in_group("enemies"):
@@ -1058,7 +1194,7 @@ func extract_network_player(peer_id: int, extraction_name: String) -> bool:
 	var network_player := network_players.get(peer_id) as PlayerController
 	if not is_instance_valid(network_player):
 		return false
-	if not _can_extract_network_player(network_player, extraction_name):
+	if extraction_name != "abandoned" and not _can_extract_network_player(network_player, extraction_name):
 		print("[RAID] rejected extraction peer=%d reason=outside_zone" % peer_id)
 		return false
 	network_players.erase(peer_id)
@@ -1080,6 +1216,13 @@ func _can_extract_network_player(network_player: PlayerController, extraction_na
 	return false
 
 func on_player_died() -> void:
+	if NetworkManager.is_network_game() and multiplayer.is_server():
+		for candidate: PlayerController in network_players.values():
+			if candidate.dead:
+				var peer_id := candidate.network_peer_id
+				extract_network_player(peer_id, "abandoned")
+				NetworkManager.server_complete_raid_extraction(peer_id, false)
+				return
 	if raid_complete:
 		return
 	raid_complete = true
