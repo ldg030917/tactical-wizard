@@ -38,7 +38,7 @@ var combat_slot_buttons: Array[Button] = []
 var raid_workshop_page: int = 0
 
 func _ready() -> void:
-	$HUDRoot/LootWindow.get_node("%CloseButton").pressed.connect(func() -> void: loot_panel.visible = false)
+	$HUDRoot/LootWindow.get_node("%CloseButton").pressed.connect(_close_loot)
 	$HUDRoot/InventoryUI.get_node("%CloseButton").pressed.connect(_close_access_panels)
 	$HUDRoot/InventoryUI.get_node("%SpellsButton").pressed.connect(_show_spell_settings)
 	$HUDRoot/RaidSpellSettings.get_node("%CloseButton").pressed.connect(_close_access_panels)
@@ -98,7 +98,9 @@ func _process(_delta: float) -> void:
 	interaction_prompt.text = "◇  E" if not player.nearby_interaction.is_empty() else ""
 	interaction_prompt.tooltip_text = player.nearby_interaction
 	reticle.text = "◎" if config != null and config.valid and config.behavior_type != "projectile" else "+"
-	reticle.position = get_viewport().get_mouse_position() - Vector2(13, 19)
+	reticle.visible = not player.is_aim_input_blocked()
+	var reticle_position := player.get_virtual_aim_position() if player.is_virtual_aim_active() else get_viewport().get_mouse_position()
+	reticle.position = reticle_position - Vector2(13, 19)
 
 func _page_name(index: int) -> String:
 	if player == null or index >= player.page_configs.size():
@@ -139,22 +141,39 @@ func toggle_inventory() -> void:
 		inventory_panel.visible = true
 		loot_panel.visible = false
 		refresh_inventory()
+	_refresh_aim_cursor_mode()
 
 func _show_inventory() -> void:
 	spell_settings_panel.visible = false
 	inventory_panel.visible = true
 	loot_panel.visible = false
 	refresh_inventory()
+	_refresh_aim_cursor_mode()
 
 func _show_spell_settings() -> void:
 	inventory_panel.visible = false
 	spell_settings_panel.visible = true
 	loot_panel.visible = false
 	refresh_spell_settings()
+	_refresh_aim_cursor_mode()
 
 func _close_access_panels() -> void:
 	inventory_panel.visible = false
 	spell_settings_panel.visible = false
+	_refresh_aim_cursor_mode()
+
+
+func _close_loot() -> void:
+	loot_panel.visible = false
+	_refresh_aim_cursor_mode()
+
+
+func is_aim_ui_open() -> bool:
+	return inventory_panel.visible or spell_settings_panel.visible or loot_panel.visible
+
+
+func _refresh_aim_cursor_mode() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if is_aim_ui_open() else Input.MOUSE_MODE_CAPTURED
 
 func refresh_inventory() -> void:
 	if inventory_rows == null:
@@ -348,12 +367,14 @@ func show_loot(container: LootContainer) -> void:
 	loot_panel.visible = true
 	inventory_panel.visible = false
 	spell_settings_panel.visible = false
+	_refresh_aim_cursor_mode()
 	loot_title.text = container.container_name
 	refresh_loot()
 
 func dismiss_loot() -> void:
 	selected_container = null
 	loot_panel.visible = false
+	_refresh_aim_cursor_mode()
 
 func refresh_loot() -> void:
 	_clear(loot_rows)

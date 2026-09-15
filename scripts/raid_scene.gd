@@ -58,6 +58,17 @@ var raid_complete: bool = false
 var grass_wall_refresh_remaining: float = 0.0
 var grass_wall_generation: int = 0
 var explosion_devastated: bool = false
+var network_players: Dictionary = {}
+var network_enemies: Dictionary = {}
+var network_projectiles: Dictionary = {}
+var network_projectile_spawn_data: Dictionary = {}
+var network_snapshot_elapsed := 0.0
+var network_raid_active := false
+## Assigned by Main before the scene enters the tree. All network fan-out for
+## this world is scoped to this session rather than connected peers globally.
+var raid_session_id := ""
+var _next_network_enemy_id := 1
+var _next_network_magic_id := 1
 
 const GRASS_WALL_PLACEMENTS: Array[Dictionary] = [
 	{"position":Vector3(-12, 1.4, -4), "rotation":0.0},
@@ -73,6 +84,9 @@ func _ready() -> void:
 	kills = GameState.raid_kills
 	_configure_weather()
 	_configure_region()
+	if NetworkManager.is_network_game():
+		_setup_network_raid()
+		return
 	_spawn_player()
 	_activate_containers()
 	_spawn_editor_placed_loot()
@@ -80,6 +94,334 @@ func _ready() -> void:
 	hud.configure(self, player, weather)
 	if region_id != REGION_GRAPH.ENTRY_REGION_ID:
 		hud.set_extraction_status("탈출하려면 중립 지역으로 돌아가세요")
+
+
+func _setup_network_raid() -> void:
+	# Clients load the same static raid scene, but only the server simulates
+	# actors and creates player characters after every client reports ready.
+	hud.visible = false
+	if multiplayer.is_server():
+		multiplayer.peer_disconnected.connect(_on_network_raid_peer_disconnected)
+		_spawn_editor_placed_loot()
+		_spawn_editor_placed_enemies()
+
+
+func spawn_network_raid_member(peer_id: int) -> void:
+	if not multiplayer.is_server() or network_players.has(peer_id):
+		return
+	# The joining peer has its Raid Scene loaded at this point. Replay the
+	# persistent world first, then announce the new player to active members.
+	network_raid_active = true
+	_sync_network_world_to_peer(peer_id)
+	var offset_index := network_players.size()
+	var spawn_position := player_spawn.global_position + Vector3(float(offset_index % 3) * 1.25, 0.0, float(offset_index / 3) * 1.25)
+	_create_network_raid_player(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
+		spawn_network_raid_player.rpc_id(target_peer, peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees))
+	print("[PLAYER %s] spawn peer=%d players=%s" % [raid_session_id, peer_id, str(network_players.keys())])
+
+
+func _sync_network_world_to_peer(peer_id: int) -> void:
+	for existing_peer: int in network_players:
+		var existing_player := network_players[existing_peer] as PlayerController
+		if is_instance_valid(existing_player):
+			spawn_network_raid_player.rpc_id(peer_id, existing_peer, existing_player.global_position, existing_player.rotation.y)
+	for enemy_id: String in network_enemies:
+		var enemy := network_enemies[enemy_id] as EnemyController
+		if is_instance_valid(enemy):
+			spawn_network_enemy.rpc_id(peer_id, _network_enemy_spawn_data(enemy))
+	for magic_id: String in network_projectile_spawn_data:
+		var projectile_ref: Variant = network_projectiles.get(magic_id)
+		if is_instance_valid(projectile_ref):
+			spawn_network_projectile.rpc_id(peer_id, network_projectile_spawn_data[magic_id])
+
+
+func _process(delta: float) -> void:
+	if NetworkManager.is_network_game():
+		_process_network_raid(delta)
+		return
+	_update_grass_wall_cycle(delta)
+	if player != null:
+		_update_visibility()
+
+
+func _process_network_raid(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
+	_update_grass_wall_cycle(delta)
+	network_snapshot_elapsed += delta
+	if network_snapshot_elapsed < 1.0 / 20.0:
+		return
+	network_snapshot_elapsed = 0.0
+	var states: Array[Dictionary] = []
+	for peer_id: int in network_players:
+		var network_player := network_players[peer_id] as PlayerController
+		if is_instance_valid(network_player):
+			states.append({"peer_id": peer_id, "position": network_player.global_position, "rotation_y": network_player.rotation.y, "aim_pitch": network_player._network_aim_pitch, "health": network_player.health, "mana": network_player.mana, "cooldowns": network_player.page_cooldowns.duplicate(), "dead": network_player.dead})
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
+		receive_network_raid_snapshots.rpc_id(target_peer, states)
+	var enemy_states: Array[Dictionary] = []
+	for enemy_id: String in network_enemies:
+		var enemy := network_enemies[enemy_id] as EnemyController
+		if is_instance_valid(enemy):
+			enemy_states.append({"enemy_id": enemy_id, "position": enemy.global_position, "rotation_y": enemy.rotation.y, "health": enemy.health, "dead": enemy.dead})
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
+		receive_network_enemy_snapshots.rpc_id(target_peer, enemy_states)
+	var projectile_states: Array[Dictionary] = []
+	var expired_magic_ids: Array[String] = []
+	for magic_id: String in network_projectiles:
+		var projectile_ref: Variant = network_projectiles.get(magic_id)
+		if is_instance_valid(projectile_ref) and not (projectile_ref as SpellProjectile).resolved:
+			var projectile := projectile_ref as SpellProjectile
+			projectile_states.append({"magic_id": magic_id, "position": projectile.global_position})
+		else:
+			expired_magic_ids.append(magic_id)
+	for magic_id: String in expired_magic_ids:
+		network_projectiles.erase(magic_id)
+		network_projectile_spawn_data.erase(magic_id)
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
+		receive_network_projectile_snapshots.rpc_id(target_peer, projectile_states)
+
+
+func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> PlayerController:
+	if network_players.has(peer_id):
+		print("[PLAYER] Duplicate spawn ignored peer=%d" % peer_id)
+		return network_players[peer_id] as PlayerController
+	var network_player := player_scene.instantiate() as PlayerController
+	network_player.name = "Player_%d" % peer_id
+	network_player.in_raid = true
+	network_player.configure_network(peer_id)
+	runtime_actors.add_child(network_player)
+	network_player.global_position = spawn_position
+	network_player.rotation.y = spawn_rotation_y
+	network_players[peer_id] = network_player
+	var local_peer := multiplayer.get_unique_id()
+	var is_local := not multiplayer.is_server() and peer_id == local_peer
+	print("[PLAYER] init peer=%d local_peer=%d local=%s position=%s" % [peer_id, local_peer, str(is_local), str(spawn_position)])
+	if not multiplayer.is_server() and peer_id == multiplayer.get_unique_id():
+		player = network_player
+		hud.visible = true
+		hud.configure(self, player, weather)
+		print("[PLAYER] Local player initialized peer=%d" % peer_id)
+	return network_player
+
+
+func _network_enemy_spawn_data(enemy: EnemyController) -> Dictionary:
+	return {
+		"enemy_id": enemy.network_enemy_id,
+		"scene_path": enemy.scene_file_path,
+		"enemy_data_path": enemy.enemy_data.resource_path if enemy.enemy_data != null else "",
+		"enemy_type": enemy.enemy_type,
+		"primary_element": enemy.primary_element,
+		"patrol_radius": enemy.patrol_radius,
+		"position": enemy.global_position,
+		"rotation_y": enemy.rotation.y
+	}
+
+
+func _register_network_enemy(enemy: EnemyController) -> void:
+	if not multiplayer.is_server() or enemy == null:
+		return
+	enemy.network_enemy_id = "enemy_%d" % _next_network_enemy_id
+	_next_network_enemy_id += 1
+	network_enemies[enemy.network_enemy_id] = enemy
+	print("[ENEMY] spawn id=%s type=%s position=%s" % [enemy.network_enemy_id, enemy.enemy_type, str(enemy.global_position)])
+
+
+func _serialize_spell_config(config: RuntimeSpellConfig) -> Dictionary:
+	return {
+		"spell_id": config.base_spell.spell_id,
+		"damage": config.damage_or_healing,
+		"range": config.range_meters,
+		"speed": config.projectile_speed,
+		"radius": config.area_radius,
+		"trajectory": config.trajectory,
+		"tags": config.behavior_tags,
+		"pierce": config.pierce_count,
+		"ricochet": config.ricochet_count
+	}
+
+
+func _deserialize_spell_config(data: Dictionary) -> RuntimeSpellConfig:
+	var spell := ContentRegistry.spells().get(str(data.get("spell_id", ""))) as BaseSpellData
+	if spell == null:
+		return null
+	var config := RuntimeSpellConfig.build(spell, [], null, null)
+	config.damage_or_healing = float(data.get("damage", config.damage_or_healing))
+	config.range_meters = float(data.get("range", config.range_meters))
+	config.projectile_speed = float(data.get("speed", config.projectile_speed))
+	config.area_radius = float(data.get("radius", config.area_radius))
+	config.trajectory = str(data.get("trajectory", config.trajectory))
+	config.pierce_count = int(data.get("pierce", config.pierce_count))
+	config.ricochet_count = int(data.get("ricochet", config.ricochet_count))
+	config.behavior_tags.clear()
+	for tag: Variant in data.get("tags", []):
+		config.behavior_tags.append(str(tag))
+	return config
+
+
+func _register_network_projectile(projectile: SpellProjectile, config: RuntimeSpellConfig, start: Vector3, direction: Vector3, team: String, target: Vector3, caster_label: String) -> void:
+	if not multiplayer.is_server() or projectile == null:
+		return
+	var magic_id := "magic_%d" % _next_network_magic_id
+	_next_network_magic_id += 1
+	projectile.network_magic_id = magic_id
+	network_projectiles[magic_id] = projectile
+	projectile.projectile_resolved.connect(_on_network_projectile_resolved)
+	var spawn_data := {
+		"magic_id": magic_id,
+		"scene_path": projectile.scene_file_path,
+		"config": _serialize_spell_config(config),
+		"start": start,
+		"direction": direction,
+		"team": team,
+		"target": target,
+		"caster": caster_label
+	}
+	network_projectile_spawn_data[magic_id] = spawn_data
+	print("[MAGIC] server spawn id=%s caster=%s type=%s position=%s" % [magic_id, caster_label, config.base_spell.spell_id, str(start)])
+	for peer_id: int in NetworkManager.get_session_members(raid_session_id):
+		spawn_network_projectile.rpc_id(peer_id, spawn_data)
+
+
+func _on_network_projectile_resolved(magic_id: String, reason: String) -> void:
+	if not multiplayer.is_server() or not network_projectiles.has(magic_id):
+		return
+	network_projectiles.erase(magic_id)
+	network_projectile_spawn_data.erase(magic_id)
+	print("[PROJECTILE] despawn id=%s reason=%s" % [magic_id, reason])
+	for peer_id: int in NetworkManager.get_session_members(raid_session_id):
+		despawn_network_projectile.rpc_id(peer_id, magic_id, reason)
+
+
+func _on_network_raid_peer_disconnected(peer_id: int) -> void:
+	var network_player := network_players.get(peer_id) as PlayerController
+	network_players.erase(peer_id)
+	if is_instance_valid(network_player):
+		network_player.queue_free()
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
+		remove_network_raid_player.rpc_id(target_peer, peer_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func spawn_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> void:
+	if not multiplayer.is_server():
+		_create_network_raid_player(peer_id, spawn_position, spawn_rotation_y)
+
+
+@rpc("authority", "call_remote", "reliable")
+func spawn_network_enemy(spawn_data: Dictionary) -> void:
+	if multiplayer.is_server():
+		return
+	var enemy_id := str(spawn_data.get("enemy_id", ""))
+	if enemy_id.is_empty() or network_enemies.has(enemy_id):
+		return
+	var scene_path := str(spawn_data.get("scene_path", ""))
+	var scene := load(scene_path) as PackedScene
+	if scene == null:
+		push_error("[ENEMY] replication failed id=%s scene=%s" % [enemy_id, scene_path])
+		return
+	var enemy := scene.instantiate() as EnemyController
+	if enemy == null:
+		return
+	var data_path := str(spawn_data.get("enemy_data_path", ""))
+	if not data_path.is_empty():
+		enemy.enemy_data = load(data_path) as EnemyData
+	enemy.enemy_type = str(spawn_data.get("enemy_type", enemy.enemy_type))
+	enemy.primary_element = str(spawn_data.get("primary_element", enemy.primary_element))
+	enemy.patrol_radius = float(spawn_data.get("patrol_radius", enemy.patrol_radius))
+	enemy.configure_network_replica(enemy_id)
+	runtime_actors.add_child(enemy)
+	var spawn_position: Vector3 = spawn_data.get("position", Vector3.ZERO)
+	enemy.global_position = spawn_position
+	enemy.rotation.y = float(spawn_data.get("rotation_y", 0.0))
+	network_enemies[enemy_id] = enemy
+	print("[ENEMY] replicated id=%s local_peer=%d position=%s" % [enemy_id, multiplayer.get_unique_id(), str(spawn_position)])
+
+
+@rpc("authority", "call_remote", "reliable")
+func spawn_network_projectile(spawn_data: Dictionary) -> void:
+	if multiplayer.is_server():
+		return
+	var magic_id := str(spawn_data.get("magic_id", ""))
+	if magic_id.is_empty():
+		return
+	var existing: Variant = network_projectiles.get(magic_id)
+	if is_instance_valid(existing):
+		return
+	network_projectiles.erase(magic_id)
+	var scene := load(str(spawn_data.get("scene_path", ""))) as PackedScene
+	var config: RuntimeSpellConfig = _deserialize_spell_config(spawn_data.get("config", {}))
+	if scene == null or config == null:
+		push_error("[MAGIC] replication failed id=%s" % magic_id)
+		return
+	var projectile := scene.instantiate() as SpellProjectile
+	if projectile == null:
+		return
+	var start: Vector3 = spawn_data.get("start", Vector3.ZERO)
+	var direction: Vector3 = spawn_data.get("direction", Vector3.FORWARD)
+	var target: Vector3 = spawn_data.get("target", Vector3.ZERO)
+	temporary_effects.add_child(projectile)
+	projectile.global_position = start
+	projectile.configure_network_visual(magic_id, config, direction, str(spawn_data.get("team", "player")), target)
+	network_projectiles[magic_id] = projectile
+	projectile.projectile_resolved.connect(_on_network_projectile_replica_resolved)
+	print("[MAGIC] client replicated id=%s local_peer=%d type=%s position=%s" % [magic_id, multiplayer.get_unique_id(), config.base_spell.spell_id, str(start)])
+
+
+func _on_network_projectile_replica_resolved(magic_id: String, _reason: String) -> void:
+	network_projectiles.erase(magic_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func despawn_network_projectile(magic_id: String, reason: String) -> void:
+	if multiplayer.is_server():
+		return
+	var projectile_ref: Variant = network_projectiles.get(magic_id)
+	network_projectiles.erase(magic_id)
+	if is_instance_valid(projectile_ref):
+		(projectile_ref as SpellProjectile).queue_free()
+	print("[PROJECTILE] despawn id=%s reason=%s" % [magic_id, reason])
+
+
+@rpc("authority", "call_remote", "reliable")
+func remove_network_raid_player(peer_id: int) -> void:
+	if multiplayer.is_server():
+		return
+	var network_player := network_players.get(peer_id) as PlayerController
+	network_players.erase(peer_id)
+	if is_instance_valid(network_player):
+		network_player.queue_free()
+
+
+@rpc("authority", "call_remote", "unreliable", 1)
+func receive_network_enemy_snapshots(states: Array[Dictionary]) -> void:
+	if multiplayer.is_server():
+		return
+	for state: Dictionary in states:
+		var enemy := network_enemies.get(str(state.get("enemy_id", ""))) as EnemyController
+		if is_instance_valid(enemy):
+			enemy.receive_network_snapshot(state)
+
+
+@rpc("authority", "call_remote", "unreliable", 1)
+func receive_network_projectile_snapshots(states: Array[Dictionary]) -> void:
+	if multiplayer.is_server():
+		return
+	for state: Dictionary in states:
+		var projectile_ref: Variant = network_projectiles.get(str(state.get("magic_id", "")))
+		if is_instance_valid(projectile_ref):
+			(projectile_ref as SpellProjectile).receive_network_snapshot(state)
+
+
+@rpc("authority", "call_remote", "unreliable", 1)
+func receive_network_raid_snapshots(states: Array[Dictionary]) -> void:
+	if multiplayer.is_server():
+		return
+	for state: Dictionary in states:
+		var network_player := network_players.get(int(state.get("peer_id", 0))) as PlayerController
+		if is_instance_valid(network_player):
+			network_player.receive_network_snapshot(state)
 
 func _configure_region() -> void:
 	var environment := world_environment.environment.duplicate() as Environment
@@ -112,11 +454,6 @@ func _spawn_region_hazards() -> void:
 	elif hazard_type == "temporary_grass_walls" and temporary_grass_wall_scene != null:
 		grass_wall_refresh_remaining = grass_wall_refresh_seconds
 		_refresh_grass_walls()
-
-func _process(delta: float) -> void:
-	_update_grass_wall_cycle(delta)
-	if player != null:
-		_update_visibility()
 
 func _update_grass_wall_cycle(delta: float) -> void:
 	if explosion_devastated or hazard_type != "temporary_grass_walls" or temporary_grass_wall_scene == null:
@@ -199,6 +536,8 @@ func _spawn_editor_placed_enemies() -> void:
 			var spawned := (child as EnemySpawnPoint).spawn_enemies(runtime_actors, rng)
 			for enemy: EnemyController in spawned:
 				enemy.primary_element = region_primary_element
+				if NetworkManager.is_network_game() and multiplayer.is_server():
+					_register_network_enemy(enemy)
 
 func _spawn_editor_placed_loot() -> void:
 	for child: Node in loot_spawns.get_children():
@@ -216,6 +555,10 @@ func _update_visibility() -> void:
 
 func toggle_inventory() -> void:
 	hud.toggle_inventory()
+
+
+func is_aim_ui_open() -> bool:
+	return hud != null and hud.is_aim_ui_open()
 
 func show_loot(container: LootContainer) -> void:
 	hud.show_loot(container)
@@ -344,6 +687,8 @@ func spawn_player_spell(caster: PlayerController, config: RuntimeSpellConfig, st
 	temporary_effects.add_child(projectile)
 	projectile.global_position = start
 	projectile.configure(caster, config, direction, "player", target)
+	if NetworkManager.is_network_game() and multiplayer.is_server():
+		_register_network_projectile(projectile, config, start, direction, "player", target, "peer:%d" % caster.network_peer_id)
 	return projectile
 
 func spawn_enemy_spell(caster: EnemyController, spell: BaseSpellData, start: Vector3, target: Vector3, attack_damage: float) -> SpellProjectile:
@@ -352,12 +697,15 @@ func spawn_enemy_spell(caster: EnemyController, spell: BaseSpellData, start: Vec
 	var config := RuntimeSpellConfig.build(spell, [], null, null)
 	config.damage_or_healing = attack_damage
 	config.area_radius = minf(config.area_radius, 0.75)
+	spawn_cast_release(start, spell.primary_element, spell.debug_color, float(_next_network_magic_id))
 	var projectile := spell.projectile_scene.instantiate() as SpellProjectile
 	temporary_effects.add_child(projectile)
 	projectile.global_position = start
 	var direction: Vector3 = target + Vector3(0, 0.8, 0) - start
 	direction.y = 0.0
 	projectile.configure(caster, config, direction.normalized(), "enemy", target)
+	if NetworkManager.is_network_game() and multiplayer.is_server():
+		_register_network_projectile(projectile, config, start, direction.normalized(), "enemy", target, "enemy:%s" % caster.network_enemy_id)
 	return projectile
 
 func spawn_healing_circle(caster: PlayerController, config: RuntimeSpellConfig, at: Vector3) -> HealingCircle:
@@ -546,6 +894,10 @@ func _cast_beam(config: RuntimeSpellConfig, start: Vector3, target: Vector3) -> 
 			node.take_damage(config.damage_or_healing, start, 0.0, config.base_spell.primary_element)
 
 func spawn_spell_impact(at: Vector3, color: Color, radius: float, primary_element: String = "neutral", variant_seed: float = 0.0) -> void:
+	if NetworkManager.is_network_game() and multiplayer.is_server():
+		for peer_id: int in NetworkManager.get_session_members(raid_session_id):
+			show_network_spell_impact.rpc_id(peer_id, at, color, radius, primary_element, variant_seed)
+		return
 	var impact_root := Node3D.new()
 	impact_root.name = "SpellImpactEffect"
 	temporary_effects.add_child(impact_root)
@@ -602,7 +954,17 @@ func spawn_spell_impact(at: Vector3, color: Color, radius: float, primary_elemen
 	ring_tween.parallel().tween_property(ring, "transparency", 1.0, 0.34)
 	get_tree().create_timer(0.85).timeout.connect(func() -> void: if is_instance_valid(impact_root): impact_root.queue_free())
 
+
+@rpc("authority", "call_remote", "reliable")
+func show_network_spell_impact(at: Vector3, color: Color, radius: float, primary_element: String, variant_seed: float) -> void:
+	if not multiplayer.is_server():
+		spawn_spell_impact(at, color, radius, primary_element, variant_seed)
+
 func spawn_cast_release(at: Vector3, primary_element: String, color: Color, variant_seed: float = 0.0) -> void:
+	if NetworkManager.is_network_game() and multiplayer.is_server():
+		for peer_id: int in NetworkManager.get_session_members(raid_session_id):
+			show_network_cast_release.rpc_id(peer_id, at, primary_element, color, variant_seed)
+		return
 	var release := MeshInstance3D.new()
 	release.name = "SpellCastRelease"
 	var torus := TorusMesh.new()
@@ -622,6 +984,12 @@ func spawn_cast_release(at: Vector3, primary_element: String, color: Color, vari
 	tween.parallel().tween_property(release, "transparency", 1.0, 0.28)
 	tween.tween_callback(release.queue_free)
 
+
+@rpc("authority", "call_remote", "reliable")
+func show_network_cast_release(at: Vector3, primary_element: String, color: Color, variant_seed: float) -> void:
+	if not multiplayer.is_server():
+		spawn_cast_release(at, primary_element, color, variant_seed)
+
 func schedule_spell_echo(config: RuntimeSpellConfig, at: Vector3) -> void:
 	get_tree().create_timer(0.75).timeout.connect(func() -> void:
 		spawn_spell_impact(at, config.base_spell.debug_color, maxf(0.8, config.area_radius), config.base_spell.primary_element, 17.0)
@@ -634,6 +1002,10 @@ func schedule_spell_echo(config: RuntimeSpellConfig, at: Vector3) -> void:
 	)
 
 func spawn_shot_tracer(start: Vector3, end: Vector3, color: Color) -> void:
+	if NetworkManager.is_network_game() and multiplayer.is_server():
+		for peer_id: int in NetworkManager.get_session_members(raid_session_id):
+			show_network_shot_tracer.rpc_id(peer_id, start, end, color)
+		return
 	var tracer := MeshInstance3D.new()
 	tracer.name = "TracerEffect"
 	var box := BoxMesh.new()
@@ -647,6 +1019,12 @@ func spawn_shot_tracer(start: Vector3, end: Vector3, color: Color) -> void:
 	var tween := tracer.create_tween()
 	tween.tween_property(tracer, "scale", Vector3(1, 1, 0.1), 0.07)
 	tween.tween_callback(tracer.queue_free)
+
+
+@rpc("authority", "call_remote", "reliable")
+func show_network_shot_tracer(start: Vector3, end: Vector3, color: Color) -> void:
+	if not multiplayer.is_server():
+		spawn_shot_tracer(start, end, color)
 
 func has_clear_line(from: Vector3, to: Vector3, exclude: Array) -> bool:
 	var query := PhysicsRayQueryParameters3D.create(from, to, 1)
@@ -662,11 +1040,44 @@ func set_extraction_status(text: String) -> void:
 func complete_extraction(extraction_name: String) -> void:
 	if raid_complete:
 		return
+	if NetworkManager.is_connected_to_server():
+		raid_complete = true
+		hud.set_extraction_status("EXTRACTION CONFIRMED")
+		NetworkManager.request_raid_extraction(extraction_name)
+		return
 	raid_complete = true
 	var summary: Dictionary = GameState.finish_raid(true, kills, extraction_name)
 	var main: Node = get_tree().current_scene
 	if main.has_method("show_end_screen"):
 		main.show_end_screen(summary)
+
+
+func extract_network_player(peer_id: int, extraction_name: String) -> bool:
+	if not multiplayer.is_server():
+		return false
+	var network_player := network_players.get(peer_id) as PlayerController
+	if not is_instance_valid(network_player):
+		return false
+	if not _can_extract_network_player(network_player, extraction_name):
+		print("[RAID] rejected extraction peer=%d reason=outside_zone" % peer_id)
+		return false
+	network_players.erase(peer_id)
+	network_player.queue_free()
+	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
+		remove_network_raid_player.rpc_id(target_peer, peer_id)
+	print("[RAID %s] extracted peer=%d via=%s" % [raid_session_id, peer_id, extraction_name])
+	return true
+
+
+func _can_extract_network_player(network_player: PlayerController, extraction_name: String) -> bool:
+	for zone: Node in extraction_zones.get_children():
+		if not zone is ExtractionZone:
+			continue
+		var extraction := zone as ExtractionZone
+		if extraction.extraction_name != extraction_name:
+			continue
+		return extraction.global_position.distance_to(network_player.global_position) <= extraction.radius + 0.25
+	return false
 
 func on_player_died() -> void:
 	if raid_complete:

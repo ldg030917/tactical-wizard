@@ -2,11 +2,12 @@
 .godot/
 /android/
 /builds/
+build/
 
 .import/
 
 export.cfg
-export_presets.cfg
+# export_presets.cfg
 
 *.tmp
 *.translation

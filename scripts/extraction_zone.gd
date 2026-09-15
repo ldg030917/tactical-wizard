@@ -58,7 +58,11 @@ func _process(delta: float) -> void:
 		return
 	if completed:
 		return
-	var player := get_tree().get_first_node_in_group("player") as PlayerController
+	# Extraction UI/countdown is local-client presentation. The dedicated server
+	# validates the final request against its authoritative player transform.
+	if NetworkManager.is_network_game() and multiplayer.is_server():
+		return
+	var player := _active_local_player()
 	if player == null or player.dead:
 		return
 	player_inside = global_position.distance_to(player.global_position) <= radius
@@ -103,6 +107,16 @@ func _raid_scene() -> Node:
 			return node
 		node = node.get_parent()
 	return get_parent()
+
+
+func _active_local_player() -> PlayerController:
+	for node: Node in get_tree().get_nodes_in_group("player"):
+		if not node is PlayerController:
+			continue
+		var candidate := node as PlayerController
+		if not NetworkManager.is_network_game() or candidate.is_local_network_player():
+			return candidate
+	return null
 
 func _quest_condition_met() -> bool:
 	for quest: Dictionary in GameState.quests:

@@ -10,6 +10,17 @@ signal injury_changed(body_part: String, severity: float)
 
 @export var in_raid: bool = true
 
+## Set by the authoritative world before the node enters the scene tree.
+var network_enabled := false
+var network_peer_id := 1
+var _network_move_input := Vector2.ZERO
+var _network_sprint := false
+var _network_crouch := false
+var _network_focus := false
+var _network_rotation_y := 0.0
+var _network_send_elapsed := 0.0
+var _snapshot_buffer: Array[Dictionary] = []
+
 @export_category("Movement")
 @export_range(0.1, 20.0, 0.1, "suffix:m/s") var base_move_speed: float = 5.2
 @export_range(1.0, 3.0, 0.05) var sprint_speed_multiplier: float = 1.55
@@ -31,6 +42,11 @@ signal injury_changed(body_part: String, severity: float)
 @export_range(5.0, 30.0, 0.5, "suffix:m") var camera_height: float = 15.0
 @export_range(2.0, 25.0, 0.5, "suffix:m") var camera_distance: float = 11.0
 @export_range(0.0, 1.0, 0.05) var aim_look_ahead: float = 0.28
+@export_range(0.1, 3.0, 0.05) var free_aim_cursor_sensitivity: float = 1.0
+@export_range(0.05, 0.8, 0.01) var free_aim_dead_zone_ratio: float = 0.28
+@export_range(0.1, 1.5, 0.05) var free_aim_pitch_turn_speed: float = 1.65
+@export_range(10.0, 300.0, 1.0) var free_aim_ray_distance: float = 90.0
+@export_range(10.0, 400.0, 1.0) var free_aim_cursor_recenter_pixels_per_radian: float = 115.0
 
 @export_category("Scene Node References")
 @export_node_path("Node3D") var visual_root_path: NodePath = ^"Visual"
@@ -76,15 +92,30 @@ var nearby_interaction: String = ""
 var active_healing_circle: HealingCircle
 var burn_remaining: float = 0.0
 var burn_damage_per_second: float = 0.0
+var burn_source_label := "status:burn"
 var slow_remaining: float = 0.0
 var slow_multiplier: float = 1.0
 var poison_remaining: float = 0.0
 var poison_damage_per_second: float = 0.0
+var poison_source_label := "status:poison"
 var exhaustion_remaining: float = 0.0
 var walk_time: float = 0.0
 var recoil_amount: float = 0.0
 var injuries: Dictionary = {"head":0.0, "torso":0.0, "left_arm":0.0, "right_arm":0.0, "left_leg":0.0, "right_leg":0.0}
 var last_element_feedback: String = ""
+var _last_network_damage_log_time := -INF
+var _network_aim_yaw := 0.0
+var _network_aim_pitch := 0.0
+var _network_aim_initialized := false
+var _local_snapshot_rotation_suppressed_logged := false
+var _virtual_aim_position := Vector2.ZERO
+var _virtual_aim_initialized := false
+var _network_aim_origin := Vector3.ZERO
+var _network_aim_direction := Vector3.FORWARD
+var _free_aim_in_turn_zone := false
+const NETWORK_RECONCILE_MIN_DISTANCE := 0.035
+const NETWORK_RECONCILE_SNAP_DISTANCE := 2.0
+const NETWORK_RECONCILE_BLEND := 0.12
 
 @onready var visual: Node3D = get_node(visual_root_path) as Node3D
 @onready var wand_socket: Node3D = get_node(wand_socket_path) as Node3D
@@ -125,8 +156,56 @@ func _ready() -> void:
 	camera.global_position = global_position + Vector3(0, camera_height, camera_distance)
 	camera.look_at(global_position + Vector3(0, 0.5, 0))
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	if network_enabled:
+		set_multiplayer_authority(network_peer_id)
+		_configure_network_presentation()
+
+
+func configure_network(peer_id: int) -> void:
+	network_enabled = true
+	network_peer_id = peer_id
+
+
+func is_local_network_player() -> bool:
+	return network_enabled and not multiplayer.is_server() and network_peer_id == multiplayer.get_unique_id()
+
+
+func _configure_network_presentation() -> void:
+	var local_peer := multiplayer.get_unique_id()
+	var is_local := is_local_network_player()
+	print("[PLAYER] init peer=%d local_peer=%d local=%s" % [network_peer_id, local_peer, str(is_local)])
+	if is_local:
+		_initialize_local_network_player()
+	else:
+		_initialize_remote_network_player()
+
+
+func _initialize_local_network_player() -> void:
+	# configure_network() runs before add_child(), so this decision is valid in
+	# _ready() for both the first and a late-joining Raid player.
+	camera.current = true
+	set_process_unhandled_input(true)
+	_network_aim_yaw = rotation.y
+	_network_aim_initialized = true
+	_initialize_virtual_aim_cursor()
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	print("[AIM] local player initialized peer=%d snapshot_rotation_applied=false" % network_peer_id)
+
+
+func _initialize_remote_network_player() -> void:
+	camera.current = false
+	placement_preview.visible = false
+	trajectory_preview.visible = false
+	set_process_unhandled_input(false)
+	if multiplayer.is_server():
+		visual.visible = false
+	else:
+		print("[AIM] remote player initialized peer=%d snapshot_rotation_applied=true" % network_peer_id)
 
 func _physics_process(delta: float) -> void:
+	if network_enabled:
+		_network_physics_process(delta)
+		return
 	if dead:
 		velocity = velocity.move_toward(Vector3.ZERO, delta * 8.0)
 		move_and_slide()
@@ -140,6 +219,9 @@ func _physics_process(delta: float) -> void:
 	_update_visuals(delta)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if network_enabled:
+		_handle_network_input(event)
+		return
 	if dead:
 		return
 	if event.is_action_pressed("spell_page_1"):
@@ -174,6 +256,195 @@ func _unhandled_input(event: InputEvent) -> void:
 		var root: Node = get_tree().current_scene
 		if root.has_method("toggle_pause"):
 			root.toggle_pause()
+
+
+func _network_physics_process(delta: float) -> void:
+	if multiplayer.is_server():
+		rotation.y = _network_rotation_y
+		# The headless server owns combat timing even though it skips visual casts.
+		_tick_combat_cooldowns(delta)
+		if dead:
+			velocity = velocity.move_toward(Vector3.ZERO, delta * 8.0)
+			move_and_slide()
+			return
+		_apply_movement_input(_network_move_input, _network_sprint, _network_crouch, _network_focus, delta)
+		_update_status(delta)
+		return
+	if is_local_network_player():
+		if dead:
+			return
+		if _is_free_aim_ui_blocked():
+			velocity = Vector3.ZERO
+			return
+		# Smooth the local cooldown UI between authoritative snapshots.
+		_tick_combat_cooldowns(delta)
+		_update_free_aim_turn(delta)
+		_update_aim()
+		_update_movement(delta) # local prediction; server snapshots reconcile it.
+		_update_camera(delta)
+		_update_visuals(delta)
+		_network_send_elapsed += delta
+		if _network_send_elapsed >= 1.0 / 30.0:
+			_network_send_elapsed = 0.0
+			submit_movement_input.rpc_id(1, Input.get_vector("move_left", "move_right", "move_up", "move_down"), rotation.y, _network_aim_pitch, Input.is_action_pressed("sprint"), Input.is_action_pressed("crouch"), Input.is_action_pressed("cancel_cast"))
+		return
+	_apply_remote_snapshot(delta)
+	_update_visuals(delta)
+
+
+func _handle_network_input(event: InputEvent) -> void:
+	if dead or not is_local_network_player():
+		return
+	if _is_free_aim_ui_blocked():
+		return
+	if event is InputEventMouseMotion:
+		_move_virtual_aim_cursor((event as InputEventMouseMotion).relative * free_aim_cursor_sensitivity)
+		return
+	if event.is_action_pressed("spell_page_1"):
+		select_spell_page(0)
+	elif event.is_action_pressed("spell_page_2"):
+		select_spell_page(1)
+	elif event.is_action_pressed("spell_page_3"):
+		select_spell_page(2)
+	elif event.is_action_pressed("dagger_slot"):
+		select_combat_slot(3)
+	elif event.is_action_pressed("cast_spell"):
+		if active_combat_slot == 3:
+			request_dagger_attack.rpc_id(1)
+		else:
+			var config := current_spell_config()
+			print("[CAST_INPUT] peer=%d page=%d spell=%s" % [network_peer_id, selected_page, config.base_spell.spell_id if config != null else "invalid"])
+			print("[CAST_REQUEST] peer=%d page=%d aim_origin=%s aim_direction=%s" % [network_peer_id, selected_page, str(_network_aim_origin), str(_network_aim_direction)])
+			_log_network_cast_aim()
+			request_spell_cast.rpc_id(1, selected_page, _network_aim_origin, _network_aim_direction)
+	elif event.is_action_pressed("dagger_attack"):
+		request_dagger_attack.rpc_id(1)
+	elif event.is_action_pressed("inventory") and in_raid:
+		var raid: Node = _gameplay_area()
+		if raid.has_method("toggle_inventory"):
+			raid.toggle_inventory()
+	elif event.is_action_pressed("pause_game"):
+		var root: Node = get_tree().current_scene
+		if root.has_method("toggle_pause"):
+			root.toggle_pause()
+
+
+@rpc("any_peer", "call_remote", "unreliable", 1)
+func submit_movement_input(input: Vector2, rotation_y: float, aim_pitch: float, sprint_pressed: bool, crouch_pressed: bool, focus_pressed: bool) -> void:
+	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != network_peer_id:
+		return
+	_network_move_input = input.limit_length(1.0)
+	_network_rotation_y = rotation_y
+	_network_aim_pitch = clampf(aim_pitch, -0.65, 0.65)
+	_network_sprint = sprint_pressed
+	_network_crouch = crouch_pressed
+	_network_focus = focus_pressed
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_dagger_attack() -> void:
+	if multiplayer.is_server() and multiplayer.get_remote_sender_id() == network_peer_id and in_raid:
+		dagger_attack()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_spell_cast(page_index: int, reported_aim_origin: Vector3, reported_aim_direction: Vector3) -> void:
+	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != network_peer_id:
+		return
+	if page_index < 0 or page_index >= page_configs.size():
+		print("[CAST_REJECT] peer=%d reason=invalid_page page=%d" % [network_peer_id, page_index])
+		return
+	select_spell_page(page_index)
+	var config := current_spell_config()
+	if config == null or not config.valid:
+		print("[CAST_REJECT] peer=%d reason=invalid_spell page=%d" % [network_peer_id, page_index])
+		return
+	var rejection_reason := _cast_rejection_reason(config)
+	print("[CAST_REQUEST] peer=%d spell=%s cooldown=%.3f casting=%s mana=%.2f" % [network_peer_id, config.base_spell.spell_id, cooldown_remaining(), str(casting), mana])
+	if not rejection_reason.is_empty():
+		print("[CAST_REJECT] peer=%d spell=%s reason=%s" % [network_peer_id, config.base_spell.spell_id, rejection_reason])
+		return
+	if reported_aim_direction.length_squared() < 0.001:
+		print("[CAST_REJECT] peer=%d spell=%s reason=invalid_aim_direction" % [network_peer_id, config.base_spell.spell_id])
+		return
+	var max_origin_distance := camera_height + camera_distance + 4.0
+	if reported_aim_origin.distance_to(global_position) > max_origin_distance:
+		print("[CAST_REJECT] peer=%d spell=%s reason=invalid_aim_origin" % [network_peer_id, config.base_spell.spell_id])
+		return
+	var requested_target := _server_aim_target(reported_aim_origin, reported_aim_direction.normalized(), config.range_meters)
+	var projectile_direction := (requested_target - cast_origin.global_position).normalized()
+	print("[AIM] server cast peer=%d aim_origin=%s aim_direction=%s muzzle=%s target=%s projectile_dir=%s" % [network_peer_id, str(reported_aim_origin), str(reported_aim_direction.normalized()), str(cast_origin.global_position), str(requested_target), str(projectile_direction)])
+	if cast_selected_spell_immediate(requested_target):
+		print("[CAST_ACCEPT] peer=%d spell=%s cooldown=%.3f mana=%.2f" % [network_peer_id, config.base_spell.spell_id, cooldown_remaining(), mana])
+	else:
+		print("[CAST_REJECT] peer=%d spell=%s reason=state_changed_during_cast" % [network_peer_id, config.base_spell.spell_id])
+
+
+func _log_network_cast_aim() -> void:
+	if camera == null or cast_origin == null:
+		return
+	var camera_forward := -camera.global_transform.basis.z
+	var projectile_direction := (aim_point - cast_origin.global_position).normalized()
+	print("[AIM] cast peer=%d body_yaw=%.3f camera_yaw=%.3f camera_pitch=%.3f camera_origin=%s camera_forward=%s aim_target=%s projectile_dir=%s" % [network_peer_id, rotation.y, camera.global_rotation.y, _network_aim_pitch, str(camera.global_position), str(camera_forward), str(aim_point), str(projectile_direction)])
+
+
+func receive_network_snapshot(snapshot: Dictionary) -> void:
+	if multiplayer.is_server():
+		return
+	if is_local_network_player():
+		var authoritative_position: Vector3 = snapshot.get("position", global_position)
+		var position_error := authoritative_position - global_position
+		var error_distance := position_error.length()
+		if error_distance >= NETWORK_RECONCILE_SNAP_DISTANCE:
+			# A large divergence is a genuine correction (spawn, collision, or a
+			# missed input); resolve it clearly instead of oscillating for seconds.
+			global_position = authoritative_position
+		elif error_distance >= NETWORK_RECONCILE_MIN_DISTANCE:
+			# Small prediction/latency differences are reconciled gently. Applying a
+			# large lerp every 20 Hz caused visible movement jitter.
+			global_position += position_error * NETWORK_RECONCILE_BLEND
+		# The local body yaw is driven by local mouse input and submitted to the
+		# server. Applying server yaw again here created a continuous tug-of-war.
+		if not _local_snapshot_rotation_suppressed_logged:
+			print("[AIM] peer=%d local=true snapshot_rotation_applied=false" % network_peer_id)
+			_local_snapshot_rotation_suppressed_logged = true
+		health = float(snapshot.get("health", health))
+		mana = float(snapshot.get("mana", mana))
+		dead = bool(snapshot.get("dead", dead))
+		_apply_network_cooldowns(snapshot)
+		return
+	_snapshot_buffer.append({
+		"received_at": Time.get_ticks_msec() / 1000.0,
+		"position": snapshot.get("position", global_position),
+		"rotation_y": snapshot.get("rotation_y", rotation.y),
+		"aim_pitch": snapshot.get("aim_pitch", _network_aim_pitch),
+		"health": snapshot.get("health", health),
+		"mana": snapshot.get("mana", mana),
+		"dead": snapshot.get("dead", dead)
+	})
+	while _snapshot_buffer.size() > 12:
+		_snapshot_buffer.pop_front()
+
+
+func _apply_remote_snapshot(_delta: float) -> void:
+	if _snapshot_buffer.is_empty():
+		return
+	var render_time := Time.get_ticks_msec() / 1000.0 - 0.10
+	while _snapshot_buffer.size() > 1 and float(_snapshot_buffer[1].received_at) <= render_time:
+		_snapshot_buffer.pop_front()
+	var first: Dictionary = _snapshot_buffer[0]
+	var second: Dictionary = _snapshot_buffer[1] if _snapshot_buffer.size() > 1 else first
+	var duration := maxf(0.001, float(second.received_at) - float(first.received_at))
+	var alpha := clampf((render_time - float(first.received_at)) / duration, 0.0, 1.0)
+	var first_position: Vector3 = first.position
+	var second_position: Vector3 = second.position
+	global_position = first_position.lerp(second_position, alpha)
+	rotation.y = lerp_angle(float(first.rotation_y), float(second.rotation_y), alpha)
+	_network_aim_pitch = lerpf(float(first.aim_pitch), float(second.aim_pitch), alpha)
+	wand_socket.rotation.x = lerpf(wand_socket.rotation.x, _network_aim_pitch * 0.45, 0.22)
+	health = lerpf(float(first.health), float(second.health), alpha)
+	mana = lerpf(float(first.mana), float(second.mana), alpha)
+	dead = bool(second.dead)
 
 func _configure_equipment_stats() -> void:
 	armor = 0.0
@@ -250,12 +521,18 @@ func cast_progress_ratio() -> float:
 
 func _update_movement(delta: float) -> void:
 	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	_apply_movement_input(input, Input.is_action_pressed("sprint"), Input.is_action_pressed("crouch"), Input.is_action_pressed("cancel_cast"), delta)
+
+
+func _apply_movement_input(input: Vector2, sprint_pressed: bool, crouch_pressed: bool, focus_pressed: bool, delta: float) -> void:
+	# Duckov-style movement is world-space. Facing is replicated separately and
+	# must never rotate W/A/S/D on either the client or the dedicated server.
 	var direction := Vector3(input.x, 0, input.y)
 	if exhaustion_remaining > 0.0:
 		direction = Vector3.ZERO
-	is_focused = Input.is_action_pressed("cancel_cast") and not casting
-	is_crouching = Input.is_action_pressed("crouch")
-	is_sprinting = exhaustion_remaining <= 0.0 and Input.is_action_pressed("sprint") and stamina > 0.5 and input.length() > 0.1 and not casting and not is_focused and not is_crouching
+	is_focused = focus_pressed and not casting
+	is_crouching = crouch_pressed
+	is_sprinting = exhaustion_remaining <= 0.0 and sprint_pressed and stamina > 0.5 and input.length() > 0.1 and not casting and not is_focused and not is_crouching
 	var speed: float = base_move_speed * slow_multiplier
 	var leg_injury: float = maxf(float(injuries.left_leg), float(injuries.right_leg))
 	speed *= 1.0 - leg_injury * 0.35
@@ -282,6 +559,12 @@ func _update_movement(delta: float) -> void:
 func _update_aim() -> void:
 	if camera == null:
 		return
+	if network_enabled and is_local_network_player():
+		if not _network_aim_initialized:
+			_network_aim_yaw = rotation.y
+			_network_aim_initialized = true
+		rotation.y = _network_aim_yaw
+		return
 	var mouse: Vector2 = get_viewport().get_mouse_position()
 	var origin: Vector3 = camera.project_ray_origin(mouse)
 	var direction: Vector3 = camera.project_ray_normal(mouse)
@@ -300,11 +583,111 @@ func _update_camera(delta: float) -> void:
 	look_offset = look_offset.limit_length(3.0) * aim_look_ahead
 	var desired: Vector3 = global_position + Vector3(0, camera_height, camera_distance) + look_offset
 	camera.global_position = camera.global_position.lerp(desired, 1.0 - exp(-delta * 6.5))
-	camera.look_at(global_position + Vector3(0, 0.55, 0) + look_offset)
+	var look_target := global_position + Vector3(0, 0.55, 0) + look_offset
+	if network_enabled and is_local_network_player():
+		# Body owns yaw; the camera target owns local pitch. Neither value is
+		# overwritten by the server's movement snapshot.
+		look_target.y += tan(_network_aim_pitch) * 5.0
+	camera.look_at(look_target)
+	if network_enabled and is_local_network_player():
+		_update_network_camera_aim_target()
+
+
+func _update_network_camera_aim_target() -> void:
+	var viewport := get_viewport()
+	_initialize_virtual_aim_cursor()
+	var viewport_size := viewport.get_visible_rect().size
+	_virtual_aim_position = _virtual_aim_position.clamp(Vector2.ZERO, viewport_size)
+	_network_aim_origin = camera.project_ray_origin(_virtual_aim_position)
+	_network_aim_direction = camera.project_ray_normal(_virtual_aim_position).normalized()
+	aim_point = _raycast_aim_target(_network_aim_origin, _network_aim_direction, free_aim_ray_distance)
+	_apply_network_aim_facing()
+	_update_preview()
+
+
+func _apply_network_aim_facing() -> void:
+	var horizontal_aim := aim_point - global_position
+	horizontal_aim.y = 0.0
+	if horizontal_aim.length_squared() <= 0.05:
+		return
+	# Reuses the Solo aim convention: CharacterBody3D forward is -Z.
+	_network_aim_yaw = atan2(-horizontal_aim.x, -horizontal_aim.z)
+	rotation.y = _network_aim_yaw
+
+
+func _initialize_virtual_aim_cursor() -> void:
+	if _virtual_aim_initialized:
+		return
+	_virtual_aim_position = get_viewport().get_visible_rect().size * 0.5
+	_virtual_aim_initialized = true
+
+
+func _move_virtual_aim_cursor(relative_motion: Vector2) -> void:
+	_initialize_virtual_aim_cursor()
+	var viewport_size := get_viewport().get_visible_rect().size
+	_virtual_aim_position = (_virtual_aim_position + relative_motion).clamp(Vector2.ZERO, viewport_size)
+
+
+func _update_free_aim_turn(delta: float) -> void:
+	_initialize_virtual_aim_cursor()
+	var viewport_size := get_viewport().get_visible_rect().size
+	var center := viewport_size * 0.5
+	var dead_zone_half := viewport_size * free_aim_dead_zone_ratio * 0.5
+	var available := Vector2(maxf(1.0, center.x - dead_zone_half.x), maxf(1.0, center.y - dead_zone_half.y))
+	var offset := _virtual_aim_position - center
+	var turn := Vector2.ZERO
+	if absf(offset.x) > dead_zone_half.x:
+		turn.x = signf(offset.x) * clampf((absf(offset.x) - dead_zone_half.x) / available.x, 0.0, 1.0)
+	if absf(offset.y) > dead_zone_half.y:
+		turn.y = signf(offset.y) * clampf((absf(offset.y) - dead_zone_half.y) / available.y, 0.0, 1.0)
+	var in_turn_zone := not is_zero_approx(turn.x) or not is_zero_approx(turn.y)
+	if in_turn_zone != _free_aim_in_turn_zone:
+		_free_aim_in_turn_zone = in_turn_zone
+		print("[AIM] peer=%d %s turn_zone cursor=%s turn=%s" % [network_peer_id, "entered" if in_turn_zone else "exited", str(_virtual_aim_position), str(turn)])
+	var pitch_delta := -turn.y * free_aim_pitch_turn_speed * delta
+	_network_aim_pitch = clampf(_network_aim_pitch + pitch_delta, -0.65, 0.65)
+	# Turn zones steer the camera pitch and its follow framing. Body facing is
+	# intentionally resolved from the world aim point below, even in the dead zone.
+	_virtual_aim_position.y -= turn.y * absf(pitch_delta) * free_aim_cursor_recenter_pixels_per_radian
+	_virtual_aim_position = _virtual_aim_position.clamp(Vector2.ZERO, viewport_size)
+
+
+func get_virtual_aim_position() -> Vector2:
+	_initialize_virtual_aim_cursor()
+	return _virtual_aim_position
+
+
+func is_virtual_aim_active() -> bool:
+	return is_local_network_player() and not _is_free_aim_ui_blocked()
+
+
+func is_aim_input_blocked() -> bool:
+	return _is_free_aim_ui_blocked()
+
+
+func _raycast_aim_target(ray_origin: Vector3, ray_direction: Vector3, max_distance: float) -> Vector3:
+	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_direction * max_distance, 1 | 4)
+	query.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.position if not hit.is_empty() else ray_origin + ray_direction * max_distance
+
+
+func _server_aim_target(ray_origin: Vector3, ray_direction: Vector3, max_distance: float) -> Vector3:
+	return _raycast_aim_target(ray_origin, ray_direction, max_distance)
+
+
+func _is_free_aim_ui_blocked() -> bool:
+	var root: Node = get_tree().current_scene
+	if root.has_method("is_local_ui_open") and root.is_local_ui_open():
+		return true
+	var raid: Node = _gameplay_area()
+	return raid.has_method("is_aim_ui_open") and raid.is_aim_ui_open()
 
 func begin_cast() -> bool:
 	var config := current_spell_config()
-	if active_combat_slot == 3 or casting or config == null or not config.valid or cooldown_remaining() > 0.0:
+	var rejection_reason := _cast_rejection_reason(config)
+	if not rejection_reason.is_empty():
+		_match_cast_rejection_message(rejection_reason)
 		return false
 	var is_explosion: bool = config.base_spell.spell_id == "explosion"
 	if is_explosion and not in_raid:
@@ -338,9 +721,7 @@ func cancel_cast() -> void:
 	cast_glow.scale = Vector3.ONE
 
 func _update_casting(delta: float) -> void:
-	for index: int in range(page_cooldowns.size()):
-		page_cooldowns[index] = maxf(0.0, page_cooldowns[index] - delta)
-	dagger_cooldown = maxf(0.0, dagger_cooldown - delta)
+	_tick_combat_cooldowns(delta)
 	if not casting:
 		return
 	cast_elapsed += delta
@@ -352,6 +733,53 @@ func _update_casting(delta: float) -> void:
 	cast_glow.rotation.z -= delta * 4.0
 	if cast_elapsed >= cast_duration:
 		complete_cast()
+
+
+func _tick_combat_cooldowns(delta: float) -> void:
+	for index: int in range(page_cooldowns.size()):
+		page_cooldowns[index] = maxf(0.0, page_cooldowns[index] - delta)
+	dagger_cooldown = maxf(0.0, dagger_cooldown - delta)
+
+
+func _cast_rejection_reason(config: RuntimeSpellConfig) -> String:
+	if active_combat_slot == 3:
+		return "dagger_slot"
+	if casting:
+		return "is_casting"
+	if config == null or not config.valid:
+		return "invalid_spell"
+	if cooldown_remaining() > 0.001:
+		return "cooldown"
+	var is_explosion := config.base_spell.spell_id == "explosion"
+	if is_explosion and not in_raid:
+		return "explosion_outside_raid"
+	if is_explosion and not GameState.can_use_explosion():
+		return "explosion_already_used"
+	if is_explosion and mana + 0.001 < max_mana:
+		return "explosion_requires_full_mana"
+	if not is_explosion and mana + 0.001 < config.mana_cost:
+		return "insufficient_mana"
+	return ""
+
+
+func _match_cast_rejection_message(reason: String) -> void:
+	match reason:
+		"explosion_outside_raid":
+			_show_message("Explosion can only be invoked during an expedition.")
+		"explosion_already_used":
+			_show_message("Explosion has already been used during this expedition.")
+		"explosion_requires_full_mana":
+			_show_message("Explosion requires a completely full mana reserve.")
+		"insufficient_mana":
+			_show_message("Insufficient mana — use an Azure Tonic or wait for regeneration.")
+
+
+func _apply_network_cooldowns(snapshot: Dictionary) -> void:
+	var snapshot_cooldowns: Variant = snapshot.get("cooldowns", null)
+	if not snapshot_cooldowns is Array:
+		return
+	for index: int in range(mini(page_cooldowns.size(), snapshot_cooldowns.size())):
+		page_cooldowns[index] = maxf(0.0, float(snapshot_cooldowns[index]))
 
 func complete_cast() -> bool:
 	var config := current_spell_config()
@@ -381,7 +809,6 @@ func complete_cast() -> bool:
 			active_healing_circle = raid.spawn_healing_circle(self, config, cast_target)
 	elif config.behavior_type == "projectile":
 		var base_direction: Vector3 = cast_target - cast_origin.global_position
-		base_direction.y = 0.0
 		base_direction = base_direction.normalized()
 		if "beam" in config.behavior_tags and raid.has_method("cast_special_spell"):
 			raid.cast_special_spell(self, config, cast_origin.global_position, cast_target, base_direction, "beam")
@@ -438,7 +865,7 @@ func dagger_attack() -> bool:
 		raid.spawn_spell_impact(global_position + -global_transform.basis.z * 1.1 + Vector3(0, 0.5, 0), dagger.debug_color, dagger.attack_range * 0.65)
 	return hit_any
 
-func take_damage(amount: float, source: Vector3 = Vector3.ZERO, bleed_chance: float = 0.15, element: String = "physical") -> void:
+func take_damage(amount: float, source: Vector3 = Vector3.ZERO, bleed_chance: float = 0.15, element: String = "physical", source_label: String = "unknown") -> void:
 	if dead:
 		return
 	var attack_element := ElementSystem.normalize_primary(element)
@@ -453,7 +880,9 @@ func take_damage(amount: float, source: Vector3 = Vector3.ZERO, bleed_chance: fl
 	last_element_feedback = "약점" if relationship > 1.0 else "저항" if relationship < 1.0 else ""
 	if relationship > 1.0:
 		_show_message("원소 약점: %s이(가) %s에 우세" % [KoreanLocalization.element(attack_element), KoreanLocalization.element(defense_element)])
+	var health_before := health
 	health = maxf(0.0, health - reduced)
+	_record_network_damage(source_label, attack_element, reduced, health_before, health)
 	last_damage_time = Time.get_ticks_msec() / 1000.0
 	mana_regen_delay = maxf(mana_regen_delay, 3.0)
 	if element == "physical" and randf() < bleed_chance:
@@ -467,16 +896,30 @@ func take_damage(amount: float, source: Vector3 = Vector3.ZERO, bleed_chance: fl
 	if health <= 0.0:
 		_die()
 
-func apply_status(status_id: String, duration: float, power: float) -> void:
+func apply_status(status_id: String, duration: float, power: float, source_label: String = "") -> void:
 	if status_id == "burn":
 		burn_remaining = maxf(burn_remaining, duration)
 		burn_damage_per_second = maxf(burn_damage_per_second, power * (1.0 - fire_resistance))
+		if not source_label.is_empty():
+			burn_source_label = source_label
 	elif status_id == "slow":
 		slow_remaining = maxf(slow_remaining, duration)
 		slow_multiplier = clampf(1.0 - power * (1.0 - ice_resistance), 0.45, 1.0)
 	elif status_id == "poison":
 		poison_remaining = maxf(poison_remaining, duration)
 		poison_damage_per_second = maxf(poison_damage_per_second, power)
+		if not source_label.is_empty():
+			poison_source_label = source_label
+
+
+func _record_network_damage(source_label: String, element: String, amount: float, health_before: float, health_after: float) -> void:
+	if not network_enabled or not multiplayer.is_server():
+		return
+	var now_seconds := Time.get_ticks_msec() / 1000.0
+	if now_seconds - _last_network_damage_log_time < 0.5:
+		return
+	print("[DAMAGE] peer=%d source=%s element=%s amount=%.2f hp=%.2f->%.2f" % [network_peer_id, source_label, element, amount, health_before, health_after])
+	_last_network_damage_log_time = now_seconds
 
 func _apply_random_injury(severity: float) -> void:
 	var body_parts: Array = injuries.keys()
@@ -499,8 +942,10 @@ func cleanse_statuses() -> void:
 	bleeding = false
 	burn_remaining = 0.0
 	burn_damage_per_second = 0.0
+	burn_source_label = "status:burn"
 	poison_remaining = 0.0
 	poison_damage_per_second = 0.0
+	poison_source_label = "status:poison"
 	slow_remaining = 0.0
 	slow_multiplier = 1.0
 
@@ -586,25 +1031,33 @@ func _update_status(delta: float) -> void:
 		bleed_tick += delta
 		if bleed_tick >= 2.0:
 			bleed_tick = 0.0
-			take_damage(2.0, Vector3.ZERO, 0.0)
+			take_damage(2.0, Vector3.ZERO, 0.0, "physical", "bleeding")
 	if burn_remaining > 0.0:
 		burn_remaining -= delta
-		health = maxf(0.0, health - burn_damage_per_second * delta)
+		var burn_before := health
+		var burn_amount := burn_damage_per_second * delta
+		health = maxf(0.0, health - burn_amount)
+		_record_network_damage(burn_source_label, "fire", burn_amount, burn_before, health)
 		if health <= 0.0:
 			_die()
 	else:
 		burn_damage_per_second = 0.0
+		burn_source_label = "status:burn"
 	if slow_remaining > 0.0:
 		slow_remaining -= delta
 	else:
 		slow_multiplier = 1.0
 	if poison_remaining > 0.0:
 		poison_remaining -= delta
-		health = maxf(0.0, health - poison_damage_per_second * delta)
+		var poison_before := health
+		var poison_amount := poison_damage_per_second * delta
+		health = maxf(0.0, health - poison_amount)
+		_record_network_damage(poison_source_label, "poison", poison_amount, poison_before, health)
 		if health <= 0.0:
 			_die()
 	else:
 		poison_damage_per_second = 0.0
+		poison_source_label = "status:poison"
 
 func apply_exhaustion(duration: float = 3.0) -> void:
 	exhaustion_remaining = maxf(exhaustion_remaining, duration)
@@ -613,9 +1066,8 @@ func apply_exhaustion(duration: float = 3.0) -> void:
 	_show_message("탈진 — 3초 동안 이동할 수 없습니다.")
 
 func _limited_aim_target(max_range: float) -> Vector3:
-	var flat: Vector3 = aim_point - global_position
-	flat.y = 0.0
-	return global_position + flat.limit_length(max_range)
+	var offset: Vector3 = aim_point - cast_origin.global_position
+	return cast_origin.global_position + offset.limit_length(max_range)
 
 func _update_preview() -> void:
 	if placement_preview == null or page_configs.is_empty():

@@ -43,6 +43,8 @@ var primary_element: String = "neutral"
 var elemental_resistance: float = 0.0
 var last_weakness_triggered: bool = false
 var aggroed: bool = false
+var network_enemy_id := ""
+var network_replica := false
 
 @onready var visual: Node3D = %Visual
 @onready var health_bar: Label3D = %HealthBar
@@ -57,6 +59,8 @@ func _ready() -> void:
 	collision_mask = 1 | 2 | 4
 	rng.randomize()
 	_configure_variant()
+	if network_replica:
+		return
 	patrol_origin = global_position
 	target_position = _random_patrol_point()
 	state = State.PATROL
@@ -96,9 +100,24 @@ func _configure_variant() -> void:
 	max_health = health
 
 func _find_player() -> void:
-	player = get_tree().get_first_node_in_group("player") as PlayerController
+	var closest_player: PlayerController
+	var closest_distance := INF
+	var own_raid := _raid_scene()
+	for candidate: Node in get_tree().get_nodes_in_group("player"):
+		if not candidate is PlayerController:
+			continue
+		var candidate_player := candidate as PlayerController
+		if candidate_player.dead or candidate_player._gameplay_area() != own_raid:
+			continue
+		var distance := global_position.distance_squared_to(candidate_player.global_position)
+		if distance < closest_distance:
+			closest_distance = distance
+			closest_player = candidate_player
+	player = closest_player
 
 func _physics_process(delta: float) -> void:
+	if network_replica:
+		return
 	if dead:
 		return
 	_update_status(delta)
@@ -222,13 +241,15 @@ func _attack(distance: float) -> void:
 		return
 	if enemy_type in ["monster", "creature"]:
 		if distance <= attack_range + 0.35:
-			player.take_damage(damage, global_position, 0.24, primary_element)
+			var source_label := "enemy:%s#%s distance=%.2f range=%.2f" % [enemy_type, network_enemy_id if not network_enemy_id.is_empty() else str(get_instance_id()), distance, attack_range]
+			player.take_damage(damage, global_position, 0.24, primary_element, source_label)
 		attack_cooldown = attack_interval
 		return
 	var raid: Node = _raid_scene()
 	if raid != null and raid.has_method("spawn_enemy_spell"):
 		cast_glow.visible = true
 		var spell: BaseSpellData = enemy_data.prepared_spell if enemy_data != null else ContentRegistry.spells().get("fireball") as BaseSpellData
+		print("[ENEMY] cast enemy=%s magic=%s target=%d" % [network_enemy_id if not network_enemy_id.is_empty() else str(get_instance_id()), spell.spell_id if spell != null else "unknown", player.network_peer_id])
 		raid.spawn_enemy_spell(self, spell, cast_marker.global_position, player.global_position, damage)
 		if enemy_type == "boss" and raid.has_method("notify_spell_cast"):
 			raid.notify_spell_cast(global_position, 34.0)
@@ -304,6 +325,23 @@ func apply_status(status_id: String, duration: float, power: float) -> void:
 func apply_knockback(force: Vector3) -> void:
 	if enemy_type in ["monster", "creature"]:
 		knockback_velocity += force
+
+
+func configure_network_replica(enemy_id: String) -> void:
+	network_enemy_id = enemy_id
+	network_replica = true
+
+
+func receive_network_snapshot(snapshot: Dictionary) -> void:
+	if not network_replica:
+		return
+	var snapshot_position: Vector3 = snapshot.get("position", global_position)
+	global_position = global_position.lerp(snapshot_position, 0.55)
+	rotation.y = lerp_angle(rotation.y, float(snapshot.get("rotation_y", rotation.y)), 0.55)
+	health = float(snapshot.get("health", health))
+	dead = bool(snapshot.get("dead", dead))
+	health_bar.text = "%d / %d" % [int(ceil(health)), int(max_health)]
+	visible = not dead
 
 func _update_status(delta: float) -> void:
 	if burn_remaining > 0.0:
