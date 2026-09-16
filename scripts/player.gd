@@ -235,15 +235,24 @@ func _configure_network_presentation() -> void:
 func _initialize_local_network_player() -> void:
 	# configure_network() runs before add_child(), so this decision is valid in
 	# _ready() for both the first and a late-joining Raid player.
-	camera.current = true
-	camera.global_position = global_position + Vector3(0, camera_height, camera_distance)
-	camera.look_at(global_position + Vector3(0, 0.5, 0))
 	set_process_unhandled_input(true)
 	_network_aim_yaw = rotation.y
 	_network_aim_initialized = true
 	_initialize_virtual_aim_cursor()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	print("[CAMERA] local_peer=%d player_peer=%d camera_current=%s" % [multiplayer.get_unique_id(), network_peer_id, str(camera.current)])
+
+
+func activate_local_network_camera() -> void:
+	if not is_local_network_player():
+		return
+	camera.global_position = global_position + Vector3(0, camera_height, camera_distance)
+	camera.look_at(global_position + Vector3(0, 0.5, 0))
+	camera.make_current()
+	var viewport_camera := get_viewport().get_camera_3d()
+	print("[CAMERA] local_peer=%d player_peer=%d camera_current=%s viewport_camera=%s" % [
+		multiplayer.get_unique_id(), network_peer_id, str(camera.current),
+		str(viewport_camera.get_path() if viewport_camera != null else NodePath())
+	])
 
 
 func _initialize_remote_network_player() -> void:

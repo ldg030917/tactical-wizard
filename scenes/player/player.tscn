@@ -50,7 +50,7 @@ position = Vector3(0, 0.55, 0)
 [node name="TopDownCamera" type="Camera3D" parent="CameraRig"]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 0.733, 0.68, 0, -0.68, 0.733, 0, 15, 11)
-current = true
+current = false
 fov = 49.0
 
 [node name="WandSocket" type="Node3D" parent="."]

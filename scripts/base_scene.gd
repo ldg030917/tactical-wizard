@@ -142,7 +142,10 @@ func _on_network_peer_disconnected(peer_id: int) -> void:
 
 func _create_network_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float) -> PlayerController:
 	if players_by_peer.has(peer_id):
-		return players_by_peer[peer_id] as PlayerController
+		var existing_player := players_by_peer[peer_id] as PlayerController
+		if is_instance_valid(existing_player):
+			existing_player.activate_local_network_camera()
+		return existing_player
 	var network_player := player_scene.instantiate() as PlayerController
 	network_player.name = "Player_%d" % peer_id
 	network_player.in_raid = false
@@ -151,6 +154,7 @@ func _create_network_player(peer_id: int, spawn_position: Vector3, spawn_rotatio
 	network_player.global_position = spawn_position
 	network_player.rotation.y = spawn_rotation_y
 	players_by_peer[peer_id] = network_player
+	network_player.activate_local_network_camera()
 	if not multiplayer.is_server() and peer_id == multiplayer.get_unique_id():
 		player = network_player
 		_build_base_spell_hotbar()

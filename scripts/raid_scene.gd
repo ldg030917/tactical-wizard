@@ -236,7 +236,10 @@ func _process_network_raid(delta: float) -> void:
 func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_rotation_y: float, loadout_snapshot: Dictionary = {}) -> PlayerController:
 	if network_players.has(peer_id):
 		print("[PLAYER] Duplicate spawn ignored peer=%d" % peer_id)
-		return network_players[peer_id] as PlayerController
+		var existing_player := network_players[peer_id] as PlayerController
+		if is_instance_valid(existing_player):
+			existing_player.activate_local_network_camera()
+		return existing_player
 	var network_player := player_scene.instantiate() as PlayerController
 	network_player.name = "Player_%d" % peer_id
 	network_player.in_raid = true
@@ -245,6 +248,7 @@ func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_ro
 	network_player.global_position = spawn_position
 	network_player.rotation.y = spawn_rotation_y
 	network_players[peer_id] = network_player
+	network_player.activate_local_network_camera()
 	var local_peer := multiplayer.get_unique_id()
 	var is_local := not multiplayer.is_server() and peer_id == local_peer
 	print("[PLAYER] init peer=%d local_peer=%d local=%s position=%s" % [peer_id, local_peer, str(is_local), str(spawn_position)])
