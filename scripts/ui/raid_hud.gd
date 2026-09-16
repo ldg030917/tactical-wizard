@@ -173,6 +173,10 @@ func is_aim_ui_open() -> bool:
 
 
 func _refresh_aim_cursor_mode() -> void:
+	var root := get_tree().current_scene
+	if root != null and root.has_method("refresh_local_input_state"):
+		root.refresh_local_input_state("raid_hud")
+		return
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if is_aim_ui_open() else Input.MOUSE_MODE_CAPTURED
 
 func refresh_inventory() -> void:

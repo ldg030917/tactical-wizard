@@ -51,7 +51,6 @@ var _snapshot_buffer: Array[Dictionary] = []
 @export_range(0.05, 0.8, 0.01) var free_aim_dead_zone_ratio: float = 0.28
 @export_range(0.1, 1.5, 0.05) var free_aim_pitch_turn_speed: float = 1.65
 @export_range(10.0, 300.0, 1.0) var free_aim_ray_distance: float = 90.0
-@export_range(10.0, 400.0, 1.0) var free_aim_cursor_recenter_pixels_per_radian: float = 115.0
 
 @export_category("Scene Node References")
 @export_node_path("Node3D") var visual_root_path: NodePath = ^"Visual"
@@ -342,8 +341,15 @@ func _network_physics_process(delta: float) -> void:
 			# input when a local menu opens so gameplay really stops with mouse-look.
 			if not _network_input_blocked:
 				_network_input_blocked = true
+				print("[INPUT_BLOCK] peer=%d blocked=true menu_open=%s raid_ui_open=%s mouse_mode=%d" % [
+					network_peer_id, str(_main_menu_open()), str(_raid_aim_ui_open()), Input.mouse_mode
+				])
 				submit_movement_input.rpc_id(1, Vector2.ZERO, rotation.y, _network_aim_pitch, false, false, false)
 			return
+		if _network_input_blocked:
+			print("[INPUT_BLOCK] peer=%d blocked=false menu_open=%s raid_ui_open=%s mouse_mode=%d" % [
+				network_peer_id, str(_main_menu_open()), str(_raid_aim_ui_open()), Input.mouse_mode
+			])
 		_network_input_blocked = false
 		# Smooth the local cooldown UI between authoritative snapshots.
 		_tick_combat_cooldowns(delta)
@@ -364,13 +370,6 @@ func _network_physics_process(delta: float) -> void:
 
 func _handle_network_input(event: InputEvent) -> void:
 	if dead or not is_local_network_player():
-		return
-	# Escape must remain usable while the local pause menu is open; checking the
-	# UI gate first made the second Escape impossible to process.
-	if event.is_action_pressed("pause_game"):
-		var root: Node = get_tree().current_scene
-		if root.has_method("toggle_pause"):
-			root.toggle_pause()
 		return
 	if _is_free_aim_ui_blocked():
 		return
@@ -779,10 +778,8 @@ func _update_free_aim_turn(delta: float) -> void:
 		print("[AIM] peer=%d %s turn_zone cursor=%s turn=%s" % [network_peer_id, "entered" if in_turn_zone else "exited", str(_virtual_aim_position), str(turn)])
 	var pitch_delta := -turn.y * free_aim_pitch_turn_speed * delta
 	_network_aim_pitch = clampf(_network_aim_pitch + pitch_delta, -0.65, 0.65)
-	# Turn zones steer the camera pitch and its follow framing. Body facing is
-	# intentionally resolved from the world aim point below, even in the dead zone.
-	_virtual_aim_position.y -= turn.y * absf(pitch_delta) * free_aim_cursor_recenter_pixels_per_radian
-	_virtual_aim_position = _virtual_aim_position.clamp(Vector2.ZERO, viewport_size)
+	# Do not move the virtual cursor without mouse input. The previous automatic
+	# recentering made a stationary upward aim visibly drift back down.
 
 
 func get_virtual_aim_position() -> Vector2:
@@ -810,9 +807,15 @@ func _server_aim_target(ray_origin: Vector3, ray_direction: Vector3, max_distanc
 
 
 func _is_free_aim_ui_blocked() -> bool:
+	return _main_menu_open() or _raid_aim_ui_open()
+
+
+func _main_menu_open() -> bool:
 	var root: Node = get_tree().current_scene
-	if root.has_method("is_local_ui_open") and root.is_local_ui_open():
-		return true
+	return root.has_method("is_local_ui_open") and root.is_local_ui_open()
+
+
+func _raid_aim_ui_open() -> bool:
 	var raid: Node = _gameplay_area()
 	return raid.has_method("is_aim_ui_open") and raid.is_aim_ui_open()
 

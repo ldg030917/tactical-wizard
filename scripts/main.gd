@@ -78,6 +78,18 @@ func _ready() -> void:
 	show_start()
 
 
+func _input(event: InputEvent) -> void:
+	# Multiplayer pause/menu input belongs to the persistent client root. Handling
+	# Escape here (before Control nodes and Player._unhandled_input) prevents UI
+	# focus from swallowing the event or leaving menu and gameplay state inverted.
+	if not NetworkManager.is_connected_to_server() or session_phase != SessionPhase.IN_RAID:
+		return
+	if event.is_action_pressed("pause_game"):
+		print("[INPUT_EVENT] peer=%d action=pause_game pressed=true handled_by=Main" % multiplayer.get_unique_id())
+		toggle_pause("escape")
+		get_viewport().set_input_as_handled()
+
+
 func _connect_to_server() -> void:
 	connect_button.disabled = true
 	var error := NetworkManager.connect_to_default_server()
@@ -187,7 +199,7 @@ func _start_raid_scene(session_id: String = "") -> void:
 	world_container.add_child(active_area)
 	session_phase = SessionPhase.IN_RAID
 	if NetworkManager.is_connected_to_server():
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		refresh_local_input_state("raid_start")
 
 
 func _on_server_raid_session_world_requested(session_id: String) -> void:
@@ -316,17 +328,34 @@ func show_end_screen(summary: Dictionary) -> void:
 	detail.text = "원정 시간: %s  |  처치한 적: %d\n%s\n\n%s" % [_format_time(int(summary.duration)), int(summary.kills), "회수 가치: %d 크라운" % int(summary.value) if bool(summary.success) else "보호하지 않은 마법 장비와 원정 전리품을 잃었습니다.", _summary_items(summary.recovered if bool(summary.success) else summary.lost)]
 	(result_ui.get_node("%QuestProgress") as Label).text = "원정: " + GameState.active_quest_text()
 
-func toggle_pause() -> void:
+func toggle_pause(source: String = "toggle_pause") -> void:
 	if result_ui.visible:
 		return
 	if NetworkManager.is_connected_to_server():
-		local_menu_open = not local_menu_open
-		pause_menu.visible = local_menu_open
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if local_menu_open else Input.MOUSE_MODE_CAPTURED
-		print("[INPUT] peer=%d menu_open=%s mouse_mode=%s" % [multiplayer.get_unique_id(), str(local_menu_open), str(Input.mouse_mode)])
+		_set_network_menu_open(not local_menu_open, source)
 		return
 	get_tree().paused = not get_tree().paused
 	pause_menu.visible = get_tree().paused
+
+
+func _set_network_menu_open(open: bool, source: String) -> void:
+	local_menu_open = open
+	pause_menu.visible = open
+	refresh_local_input_state(source)
+
+
+func refresh_local_input_state(source: String = "external") -> void:
+	if not NetworkManager.is_connected_to_server():
+		# Preserve main's visible, absolute mouse aiming in solo play.
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return
+	var raid_ui_open := active_area is RaidScene and (active_area as RaidScene).is_aim_ui_open()
+	var gameplay_blocked := local_menu_open or raid_ui_open
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if gameplay_blocked else Input.MOUSE_MODE_CAPTURED
+	print("[INPUT_STATE] peer=%d source=%s menu_open=%s pause_visible=%s raid_ui_open=%s gameplay_blocked=%s mouse_mode=%d" % [
+		multiplayer.get_unique_id(), source, str(local_menu_open), str(pause_menu.visible),
+		str(raid_ui_open), str(gameplay_blocked), Input.mouse_mode
+	])
 
 
 func is_local_ui_open() -> bool:
