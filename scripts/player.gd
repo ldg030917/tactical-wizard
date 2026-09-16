@@ -48,9 +48,6 @@ var _snapshot_buffer: Array[Dictionary] = []
 @export_range(2.0, 25.0, 0.5, "suffix:m") var camera_distance: float = 11.0
 @export_range(0.0, 1.0, 0.05) var aim_look_ahead: float = 0.28
 @export_range(0.1, 3.0, 0.05) var free_aim_cursor_sensitivity: float = 1.0
-@export_range(0.05, 0.8, 0.01) var free_aim_dead_zone_ratio: float = 0.28
-@export_range(0.1, 1.5, 0.05) var free_aim_pitch_turn_speed: float = 1.65
-@export_range(10.0, 300.0, 1.0) var free_aim_ray_distance: float = 90.0
 
 @export_category("Scene Node References")
 @export_node_path("Node3D") var visual_root_path: NodePath = ^"Visual"
@@ -116,7 +113,6 @@ var _virtual_aim_position := Vector2.ZERO
 var _virtual_aim_initialized := false
 var _network_aim_origin := Vector3.ZERO
 var _network_aim_direction := Vector3.FORWARD
-var _free_aim_in_turn_zone := false
 const NETWORK_RECONCILE_MIN_DISTANCE := 0.035
 const NETWORK_RECONCILE_SNAP_DISTANCE := 2.0
 const NETWORK_RECONCILE_BLEND := 0.12
@@ -353,7 +349,6 @@ func _network_physics_process(delta: float) -> void:
 		_network_input_blocked = false
 		# Smooth the local cooldown UI between authoritative snapshots.
 		_tick_combat_cooldowns(delta)
-		_update_free_aim_turn(delta)
 		_update_aim()
 		_update_movement(delta) # local prediction; server snapshots reconcile it.
 		_update_camera(delta)
@@ -695,7 +690,7 @@ func _update_aim() -> void:
 		if not _network_aim_initialized:
 			_network_aim_yaw = rotation.y
 			_network_aim_initialized = true
-		rotation.y = _network_aim_yaw
+		_update_network_camera_aim_target()
 		return
 	var mouse: Vector2 = get_viewport().get_mouse_position()
 	var origin: Vector3 = camera.project_ray_origin(mouse)
@@ -715,14 +710,7 @@ func _update_camera(delta: float) -> void:
 	look_offset = look_offset.limit_length(3.0) * aim_look_ahead
 	var desired: Vector3 = global_position + Vector3(0, camera_height, camera_distance) + look_offset
 	camera.global_position = camera.global_position.lerp(desired, 1.0 - exp(-delta * 6.5))
-	var look_target := global_position + Vector3(0, 0.55, 0) + look_offset
-	if network_enabled and is_local_network_player():
-		# Body owns yaw; the camera target owns local pitch. Neither value is
-		# overwritten by the server's movement snapshot.
-		look_target.y += tan(_network_aim_pitch) * 5.0
-	camera.look_at(look_target)
-	if network_enabled and is_local_network_player():
-		_update_network_camera_aim_target()
+	camera.look_at(global_position + Vector3(0, 0.55, 0) + look_offset)
 
 
 func _update_network_camera_aim_target() -> void:
@@ -732,7 +720,7 @@ func _update_network_camera_aim_target() -> void:
 	_virtual_aim_position = _virtual_aim_position.clamp(Vector2.ZERO, viewport_size)
 	_network_aim_origin = camera.project_ray_origin(_virtual_aim_position)
 	_network_aim_direction = camera.project_ray_normal(_virtual_aim_position).normalized()
-	aim_point = _raycast_aim_target(_network_aim_origin, _network_aim_direction, free_aim_ray_distance)
+	aim_point = _ground_plane_aim_target(_network_aim_origin, _network_aim_direction, aim_point)
 	_apply_network_aim_facing()
 	_update_preview()
 
@@ -742,8 +730,8 @@ func _apply_network_aim_facing() -> void:
 	horizontal_aim.y = 0.0
 	if horizontal_aim.length_squared() <= 0.05:
 		return
-	# Reuses the Solo aim convention: CharacterBody3D forward is -Z.
-	_network_aim_yaw = atan2(-horizontal_aim.x, -horizontal_aim.z)
+	# Match main's smoothing instead of snapping network players to the target yaw.
+	_network_aim_yaw = lerp_angle(_network_aim_yaw, atan2(-horizontal_aim.x, -horizontal_aim.z), 0.32)
 	rotation.y = _network_aim_yaw
 
 
@@ -760,28 +748,6 @@ func _move_virtual_aim_cursor(relative_motion: Vector2) -> void:
 	_virtual_aim_position = (_virtual_aim_position + relative_motion).clamp(Vector2.ZERO, viewport_size)
 
 
-func _update_free_aim_turn(delta: float) -> void:
-	_initialize_virtual_aim_cursor()
-	var viewport_size := get_viewport().get_visible_rect().size
-	var center := viewport_size * 0.5
-	var dead_zone_half := viewport_size * free_aim_dead_zone_ratio * 0.5
-	var available := Vector2(maxf(1.0, center.x - dead_zone_half.x), maxf(1.0, center.y - dead_zone_half.y))
-	var offset := _virtual_aim_position - center
-	var turn := Vector2.ZERO
-	if absf(offset.x) > dead_zone_half.x:
-		turn.x = signf(offset.x) * clampf((absf(offset.x) - dead_zone_half.x) / available.x, 0.0, 1.0)
-	if absf(offset.y) > dead_zone_half.y:
-		turn.y = signf(offset.y) * clampf((absf(offset.y) - dead_zone_half.y) / available.y, 0.0, 1.0)
-	var in_turn_zone := not is_zero_approx(turn.x) or not is_zero_approx(turn.y)
-	if in_turn_zone != _free_aim_in_turn_zone:
-		_free_aim_in_turn_zone = in_turn_zone
-		print("[AIM] peer=%d %s turn_zone cursor=%s turn=%s" % [network_peer_id, "entered" if in_turn_zone else "exited", str(_virtual_aim_position), str(turn)])
-	var pitch_delta := -turn.y * free_aim_pitch_turn_speed * delta
-	_network_aim_pitch = clampf(_network_aim_pitch + pitch_delta, -0.65, 0.65)
-	# Do not move the virtual cursor without mouse input. The previous automatic
-	# recentering made a stationary upward aim visibly drift back down.
-
-
 func get_virtual_aim_position() -> Vector2:
 	_initialize_virtual_aim_cursor()
 	return _virtual_aim_position
@@ -795,15 +761,17 @@ func is_aim_input_blocked() -> bool:
 	return _is_free_aim_ui_blocked()
 
 
-func _raycast_aim_target(ray_origin: Vector3, ray_direction: Vector3, max_distance: float) -> Vector3:
-	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_direction * max_distance, 1 | 4)
-	query.exclude = [get_rid()]
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	return hit.position if not hit.is_empty() else ray_origin + ray_direction * max_distance
+func _ground_plane_aim_target(ray_origin: Vector3, ray_direction: Vector3, fallback: Vector3) -> Vector3:
+	if absf(ray_direction.y) <= 0.001:
+		return fallback
+	var distance := -ray_origin.y / ray_direction.y
+	return ray_origin + ray_direction * distance
 
 
-func _server_aim_target(ray_origin: Vector3, ray_direction: Vector3, max_distance: float) -> Vector3:
-	return _raycast_aim_target(ray_origin, ray_direction, max_distance)
+func _server_aim_target(ray_origin: Vector3, ray_direction: Vector3, _max_distance: float) -> Vector3:
+	# Validate the client ray separately, then resolve it with the same ground-plane
+	# projection used by main so authority does not change aiming behavior.
+	return _ground_plane_aim_target(ray_origin, ray_direction, aim_point)
 
 
 func _is_free_aim_ui_blocked() -> bool:
@@ -949,6 +917,7 @@ func complete_cast() -> bool:
 			active_healing_circle = raid.spawn_healing_circle(self, config, cast_target)
 	elif config.behavior_type == "projectile":
 		var base_direction: Vector3 = cast_target - cast_origin.global_position
+		base_direction.y = 0.0
 		base_direction = base_direction.normalized()
 		if "beam" in config.behavior_tags and raid.has_method("cast_special_spell"):
 			raid.cast_special_spell(self, config, cast_origin.global_position, cast_target, base_direction, "beam")
@@ -1206,8 +1175,9 @@ func apply_exhaustion(duration: float = 3.0) -> void:
 	_show_message("탈진 — 3초 동안 이동할 수 없습니다.")
 
 func _limited_aim_target(max_range: float) -> Vector3:
-	var offset: Vector3 = aim_point - cast_origin.global_position
-	return cast_origin.global_position + offset.limit_length(max_range)
+	var flat: Vector3 = aim_point - global_position
+	flat.y = 0.0
+	return global_position + flat.limit_length(max_range)
 
 func _update_preview() -> void:
 	if placement_preview == null or page_configs.is_empty():

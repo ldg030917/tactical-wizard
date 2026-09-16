@@ -38,6 +38,7 @@ var pivot_completed: bool = false
 var hit_target_ids: Dictionary = {}
 var network_magic_id := ""
 var network_visual_replica := false
+var flatten_vertical_trajectory := true
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
@@ -45,10 +46,13 @@ func _ready() -> void:
 		return
 	_apply_presentation()
 
-func configure(owner_node: Node3D, spell_config: RuntimeSpellConfig, travel_direction: Vector3, team: String, target_position: Vector3 = Vector3.ZERO) -> void:
+func configure(owner_node: Node3D, spell_config: RuntimeSpellConfig, travel_direction: Vector3, team: String, target_position: Vector3 = Vector3.ZERO, flatten_vertical: bool = true) -> void:
 	caster = owner_node
 	config = spell_config
 	direction = travel_direction.normalized()
+	flatten_vertical_trajectory = flatten_vertical
+	if flatten_vertical_trajectory:
+		direction.y = 0.0
 	source_team = team
 	speed = config.projectile_speed if config != null else default_speed
 	collision_layer = 8
@@ -58,6 +62,8 @@ func configure(owner_node: Node3D, spell_config: RuntimeSpellConfig, travel_dire
 	destination = target_position
 	if destination.is_equal_approx(Vector3.ZERO):
 		destination = start_position + direction * config.range_meters
+	if flatten_vertical_trajectory:
+		destination.y = start_y
 	path_length = maxf(0.1, start_position.distance_to(destination))
 	pierce_remaining = config.pierce_count
 	ricochet_remaining = config.ricochet_count
@@ -65,10 +71,10 @@ func configure(owner_node: Node3D, spell_config: RuntimeSpellConfig, travel_dire
 		_apply_presentation()
 
 
-func configure_network_visual(magic_id: String, spell_config: RuntimeSpellConfig, travel_direction: Vector3, team: String, target_position: Vector3) -> void:
+func configure_network_visual(magic_id: String, spell_config: RuntimeSpellConfig, travel_direction: Vector3, team: String, target_position: Vector3, flatten_vertical: bool = true) -> void:
 	network_magic_id = magic_id
 	network_visual_replica = true
-	configure(null, spell_config, travel_direction, team, target_position)
+	configure(null, spell_config, travel_direction, team, target_position, flatten_vertical)
 	monitoring = false
 	monitorable = false
 

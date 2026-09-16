@@ -506,6 +506,7 @@ func _register_network_projectile(projectile: SpellProjectile, config: RuntimeSp
 		"direction": direction,
 		"team": team,
 		"target": target,
+		"flatten_vertical": projectile.flatten_vertical_trajectory,
 		"caster": caster_label
 	}
 	network_projectile_spawn_data[magic_id] = spawn_data
@@ -803,7 +804,7 @@ func spawn_network_projectile(spawn_data: Dictionary) -> void:
 	var target: Vector3 = spawn_data.get("target", Vector3.ZERO)
 	temporary_effects.add_child(projectile)
 	projectile.global_position = start
-	projectile.configure_network_visual(magic_id, config, direction, str(spawn_data.get("team", "player")), target)
+	projectile.configure_network_visual(magic_id, config, direction, str(spawn_data.get("team", "player")), target, bool(spawn_data.get("flatten_vertical", true)))
 	network_projectiles[magic_id] = projectile
 	projectile.projectile_resolved.connect(_on_network_projectile_replica_resolved)
 	print("[MAGIC] client replicated id=%s local_peer=%d type=%s position=%s" % [magic_id, multiplayer.get_unique_id(), config.base_spell.spell_id, str(start)])
@@ -1368,7 +1369,7 @@ func spawn_enemy_spell(caster: EnemyController, spell: BaseSpellData, start: Vec
 	if direction.length_squared() < 0.001:
 		return null
 	print("[ENEMY_TARGET] enemy=%s peer=%d target_pos=%s cast_origin=%s" % [caster.network_enemy_id, caster.player.network_peer_id if caster.player != null else -1, str(target), str(start)])
-	projectile.configure(caster, config, direction.normalized(), "enemy", target)
+	projectile.configure(caster, config, direction.normalized(), "enemy", target, false)
 	if NetworkManager.is_network_game() and multiplayer.is_server():
 		_register_network_projectile(projectile, config, start, direction.normalized(), "enemy", target, "enemy:%s" % caster.network_enemy_id)
 	return projectile
