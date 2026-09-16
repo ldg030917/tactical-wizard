@@ -406,6 +406,9 @@ func show_message(text: String) -> void:
 	)
 
 func _use_item(item_id: String) -> void:
+	if NetworkManager.is_connected_to_server() and raid != null:
+		raid.request_network_inventory_action("use", item_id)
+		return
 	var category: String = str(ItemDB.get_item(item_id).get("category", ""))
 	if category == "medical":
 		GameState.remove_raid_item(item_id, 1)
@@ -425,11 +428,17 @@ func _equip_item(item_id: String) -> void:
 		raid.equip_raid_item(item_id)
 
 func _secure_item(item_id: String) -> void:
+	if NetworkManager.is_connected_to_server() and raid != null:
+		raid.request_network_inventory_action("secure", item_id)
+		return
 	if not GameState.secure_item(item_id):
 		show_message("보호 슬롯이 가득 찼거나 공간이 부족하거나 장비를 넣을 수 없습니다.")
 	refresh_inventory()
 
 func _discard_item(item_id: String) -> void:
+	if NetworkManager.is_connected_to_server() and raid != null:
+		raid.request_network_inventory_action("discard", item_id)
+		return
 	GameState.remove_raid_item(item_id, 1)
 	refresh_inventory()
 

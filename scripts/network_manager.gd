@@ -13,7 +13,10 @@ signal raid_session_world_requested(session_id: String)
 signal load_raid_requested(session_id: String)
 signal raid_session_clients_ready(session_id: String, members: Array[int])
 signal raid_extraction_requested(peer_id: int, extraction_name: String, session_id: String)
-signal raid_completed(success: bool)
+signal raid_completed(success: bool, result: Dictionary)
+signal raid_region_world_requested(session_id: String, region_id: String)
+signal load_raid_region_requested(session_id: String, region_id: String)
+signal raid_region_clients_ready(session_id: String, members: Array[int])
 
 const DEFAULT_PORT := 7000
 const DEFAULT_SERVER_ADDRESS := "158.180.84.54"
@@ -32,6 +35,7 @@ var peer_raid_states: Dictionary = {}
 ## constructing a Player for a peer; cast RPCs never carry a spell identifier.
 var peer_loadouts: Dictionary = {}
 var client_raid_session_id := ""
+var _region_transitions: Dictionary = {}
 
 
 func _ready() -> void:
@@ -145,12 +149,31 @@ func submit_local_loadout() -> void:
 	_submit_loadout.rpc_id(1, {
 		"loadout": loadout,
 		"spell_pages": GameState.spell_pages.duplicate(true),
-		"selected_character_id": GameState.selected_character_id
+		"selected_character_id": GameState.selected_character_id,
+		"skills": GameState.skills.duplicate(true),
+		"stash": GameState.stash.duplicate(true),
+		"currency": GameState.currency
 	})
 
 
 func get_peer_loadout(peer_id: int) -> Dictionary:
 	return peer_loadouts.get(peer_id, {}).duplicate(true)
+
+
+func update_peer_profile(peer_id: int, profile: Dictionary) -> void:
+	if multiplayer.is_server() and connected_peer_ids.has(peer_id):
+		peer_loadouts[peer_id] = profile.duplicate(true)
+
+
+func server_sync_client_profile(peer_id: int, raid_inventory: Dictionary) -> void:
+	if not multiplayer.is_server() or not peer_loadouts.has(peer_id):
+		return
+	var profile: Dictionary = peer_loadouts[peer_id]
+	_sync_client_profile.rpc_id(peer_id, int(profile.get("currency", 0)), profile.get("stash", {}), raid_inventory)
+
+
+func is_region_transitioning(session_id: String) -> bool:
+	return _region_transitions.has(session_id)
 
 
 ## Compatibility entry point for existing deployment station interactions.
@@ -168,6 +191,24 @@ func request_raid_extraction(extraction_name: String) -> void:
 		_request_raid_extraction.rpc_id(1, extraction_name)
 
 
+func server_begin_region_transition(session_id: String, region_id: String) -> bool:
+	if not multiplayer.is_server() or _region_transitions.has(session_id):
+		return false
+	var members := get_session_members(session_id)
+	if members.is_empty():
+		return false
+	_region_transitions[session_id] = {"region_id":region_id, "loaded":{}}
+	raid_region_world_requested.emit(session_id, region_id)
+	for peer_id: int in members:
+		_load_raid_region_on_clients.rpc_id(peer_id, session_id, region_id)
+	return true
+
+
+func client_raid_region_ready(session_id: String, region_id: String) -> void:
+	if is_connected_to_server() and session_id == client_raid_session_id:
+		_client_raid_region_loaded.rpc_id(1, session_id, region_id)
+
+
 func get_session_members(session_id: String) -> Array[int]:
 	return SessionManager.get_session_members(session_id)
 
@@ -176,7 +217,7 @@ func get_peer_session_id(peer_id: int) -> String:
 	return SessionManager.get_player_session(peer_id)
 
 
-func server_complete_raid_extraction(peer_id: int, success: bool = true) -> void:
+func server_complete_raid_extraction(peer_id: int, success: bool = true, result: Dictionary = {}) -> void:
 	if not multiplayer.is_server():
 		return
 	var session_id := get_peer_session_id(peer_id)
@@ -185,7 +226,7 @@ func server_complete_raid_extraction(peer_id: int, success: bool = true) -> void
 	print("[RAID %s] completed peer=%d success=%s" % [session_id, peer_id, str(success)])
 	SessionManager.remove_player(peer_id, "extracted")
 	peer_raid_states[peer_id] = PeerRaidState.RETURNING_TO_LOBBY
-	_raid_completed_on_client.rpc_id(peer_id, success)
+	_raid_completed_on_client.rpc_id(peer_id, success, result)
 	peer_raid_states[peer_id] = PeerRaidState.MULTIPLAYER_LOBBY
 
 
@@ -306,6 +347,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if not session_id.is_empty():
 		print("[RAID %s] disconnected peer=%d" % [session_id, peer_id])
 		SessionManager.remove_player(peer_id, "disconnected")
+		_try_finish_region_transition(session_id)
 	peer_raid_states.erase(peer_id)
 	print("[NETWORK] peer_disconnected=%d peers=%s" % [peer_id, str(connected_peer_ids.keys())])
 
@@ -387,7 +429,23 @@ func _normalize_loadout_snapshot(snapshot: Dictionary) -> Dictionary:
 	var character_id := str(snapshot.get("selected_character_id", "mana_specialist"))
 	if not ContentRegistry.characters().has(character_id):
 		return {}
-	return {"loadout": loadout, "spell_pages": pages, "selected_character_id": character_id}
+	var skills: Dictionary = {}
+	var raw_skills: Variant = snapshot.get("skills", {})
+	if raw_skills is Dictionary:
+		for skill_id: String in ContentRegistry.skills().keys():
+			var skill := ContentRegistry.skills().get(skill_id) as SkillData
+			skills[skill_id] = clampi(int(raw_skills.get(skill_id, 0)), 0, skill.maximum_rank if skill != null else 0)
+	var stash: Dictionary = {}
+	var raw_stash: Variant = snapshot.get("stash", {})
+	if raw_stash is Dictionary:
+		for item_id: String in raw_stash.keys():
+			if not ItemDB.get_item(item_id).is_empty():
+				stash[item_id] = maxi(0, int(raw_stash[item_id]))
+	return {
+		"loadout": loadout, "spell_pages": pages, "selected_character_id": character_id,
+		"skills": skills, "stash": stash, "currency": maxi(0, int(snapshot.get("currency", 0))),
+		"visited_regions":["neutral_frontier"]
+	}
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -435,10 +493,50 @@ func _request_raid_extraction(extraction_name: String) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func _raid_completed_on_client(success: bool) -> void:
+func _raid_completed_on_client(success: bool, result: Dictionary) -> void:
 	if is_connected_to_server():
 		client_raid_session_id = ""
-		raid_completed.emit(success)
+		raid_completed.emit(success, result)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _load_raid_region_on_clients(session_id: String, region_id: String) -> void:
+	if is_connected_to_server() and session_id == client_raid_session_id:
+		load_raid_region_requested.emit(session_id, region_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _client_raid_region_loaded(session_id: String, region_id: String) -> void:
+	if not multiplayer.is_server() or not _region_transitions.has(session_id):
+		return
+	var peer_id := multiplayer.get_remote_sender_id()
+	if get_peer_session_id(peer_id) != session_id:
+		return
+	var transition: Dictionary = _region_transitions[session_id]
+	if str(transition.get("region_id", "")) != region_id:
+		return
+	var loaded: Dictionary = transition.get("loaded", {})
+	loaded[peer_id] = true
+	transition["loaded"] = loaded
+	_region_transitions[session_id] = transition
+	_try_finish_region_transition(session_id)
+
+
+func _try_finish_region_transition(session_id: String) -> void:
+	if not _region_transitions.has(session_id):
+		return
+	var transition: Dictionary = _region_transitions[session_id]
+	var loaded: Dictionary = transition.get("loaded", {})
+	var members := get_session_members(session_id)
+	if members.is_empty():
+		_region_transitions.erase(session_id)
+		return
+	for loaded_peer: Variant in loaded.keys():
+		if int(loaded_peer) not in members:
+			loaded.erase(loaded_peer)
+	if loaded.size() == members.size():
+		_region_transitions.erase(session_id)
+		raid_region_clients_ready.emit(session_id, members)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -457,3 +555,14 @@ func _ping_server(sent_at_ms: int) -> void:
 func _pong_client(sent_at_ms: int) -> void:
 	if is_connected_to_server():
 		ping_ms = maxi(0, Time.get_ticks_msec() - sent_at_ms)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _sync_client_profile(currency: int, stash: Dictionary, raid_inventory: Dictionary) -> void:
+	if not is_connected_to_server():
+		return
+	GameState.currency = currency
+	GameState.stash = stash.duplicate(true)
+	GameState.raid_inventory = raid_inventory.duplicate(true)
+	GameState.save_game()
+	GameState.state_changed.emit()

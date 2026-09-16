@@ -27,6 +27,7 @@ var active_area: Node
 var start_screen: StartScreen
 var local_menu_open := false
 var session_phase := SessionPhase.MAIN_MENU
+var _pending_network_region_state: Dictionary = {}
 
 func _ready() -> void:
 	if "--content-parity-check" in OS.get_cmdline_user_args():
@@ -51,6 +52,8 @@ func _ready() -> void:
 		NetworkManager.raid_session_world_requested.connect(_on_server_raid_session_world_requested)
 		NetworkManager.raid_session_clients_ready.connect(_on_server_raid_session_clients_ready)
 		NetworkManager.raid_extraction_requested.connect(_on_server_raid_extraction_requested)
+		NetworkManager.raid_region_world_requested.connect(_on_server_raid_region_world_requested)
+		NetworkManager.raid_region_clients_ready.connect(_on_server_raid_region_clients_ready)
 		return
 
 	connect_button.pressed.connect(_connect_to_server)
@@ -67,6 +70,7 @@ func _ready() -> void:
 	NetworkManager.ping_updated.connect(_on_ping_updated)
 	NetworkManager.matchmaking_status_changed.connect(_on_matchmaking_status_changed)
 	NetworkManager.load_raid_requested.connect(_on_client_load_raid_requested)
+	NetworkManager.load_raid_region_requested.connect(_on_client_load_raid_region_requested)
 	NetworkManager.raid_completed.connect(_on_client_raid_completed)
 	(result_ui.get_node("%ReturnButton") as Button).pressed.connect(_return_from_result)
 	(pause_menu.get_node("%ResumeButton") as Button).pressed.connect(toggle_pause)
@@ -212,20 +216,65 @@ func _on_server_raid_session_clients_ready(session_id: String, members: Array[in
 			(active_area as RaidScene).spawn_network_raid_member(peer_id)
 
 
+func begin_network_region_transition(region_id: String) -> bool:
+	if not multiplayer.is_server() or not active_area is RaidScene:
+		return false
+	var raid := active_area as RaidScene
+	_pending_network_region_state = raid.capture_network_travel_state()
+	return NetworkManager.server_begin_region_transition(raid.raid_session_id, region_id)
+
+
+func _on_server_raid_region_world_requested(session_id: String, region_id: String) -> void:
+	_replace_with_network_region(session_id, region_id, _pending_network_region_state)
+	_pending_network_region_state = {}
+
+
+func _on_client_load_raid_region_requested(session_id: String, region_id: String) -> void:
+	GameState.current_raid_region_id = region_id
+	if region_id not in GameState.raid_visited_regions:
+		GameState.raid_visited_regions.append(region_id)
+	_replace_with_network_region(session_id, region_id)
+	NetworkManager.client_raid_region_ready(session_id, region_id)
+
+
+func _on_server_raid_region_clients_ready(session_id: String, members: Array[int]) -> void:
+	if active_area is RaidScene and (active_area as RaidScene).raid_session_id == session_id:
+		for peer_id: int in members:
+			(active_area as RaidScene).spawn_network_raid_member(peer_id)
+
+
+func _replace_with_network_region(session_id: String, region_id: String, restore_state: Dictionary = {}) -> void:
+	session_phase = SessionPhase.LOADING_RAID
+	pause_menu.visible = false
+	matchmaking_panel.visible = false
+	_clear_active()
+	var region := ContentRegistry.regions().get(region_id) as RegionData
+	var selected_scene: PackedScene = region.scene if region != null and region.scene != null else raid_scene
+	active_area = selected_scene.instantiate()
+	if active_area is RaidScene:
+		var new_raid := active_area as RaidScene
+		new_raid.raid_session_id = session_id
+		new_raid.network_restore_states = restore_state.get("players", {}).duplicate(true)
+		new_raid.network_restored_kills = restore_state.get("kills", {}).duplicate(true)
+	world_container.add_child(active_area)
+	session_phase = SessionPhase.IN_RAID
+
+
 func _on_server_raid_extraction_requested(peer_id: int, extraction_name: String, session_id: String) -> void:
 	if active_area is RaidScene and (active_area as RaidScene).raid_session_id == session_id:
 		var raid := active_area as RaidScene
 		var success := extraction_name != "abandoned"
 		if raid.extract_network_player(peer_id, extraction_name):
-			NetworkManager.server_complete_raid_extraction(peer_id, success)
+			NetworkManager.server_complete_raid_extraction(peer_id, success, raid.network_raid_result(extraction_name))
 
 
-func _on_client_raid_completed(success: bool) -> void:
+func _on_client_raid_completed(success: bool, server_result: Dictionary) -> void:
 	local_menu_open = false
 	pause_menu.visible = false
 	get_tree().paused = false
 	if active_area is RaidScene:
-		var summary: Dictionary = GameState.finish_raid(success, (active_area as RaidScene).kills)
+		var result_kills: Dictionary = server_result.get("kills", (active_area as RaidScene).kills)
+		var summary: Dictionary = GameState.finish_raid(success, result_kills, str(server_result.get("extraction", "")))
 		show_end_screen(summary)
 
 

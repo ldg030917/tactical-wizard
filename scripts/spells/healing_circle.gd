@@ -14,6 +14,7 @@ var owner_player: PlayerController
 var spell_config: RuntimeSpellConfig
 var duration_remaining: float = 8.0
 var tick_remaining: float = 0.0
+var network_visual_replica := false
 
 func configure(player: PlayerController, config: RuntimeSpellConfig) -> void:
 	owner_player = player
@@ -21,6 +22,11 @@ func configure(player: PlayerController, config: RuntimeSpellConfig) -> void:
 	duration_remaining = config.base_spell.effect_duration_seconds if config != null else default_duration_seconds
 	if is_node_ready():
 		_apply_size()
+
+
+func configure_network_visual(config: RuntimeSpellConfig) -> void:
+	network_visual_replica = true
+	configure(null, config)
 
 func _ready() -> void:
 	_apply_size()
@@ -36,7 +42,7 @@ func _process(delta: float) -> void:
 	rune_south.rotation.y -= delta * 2.4
 	rune_north.scale.y = 0.08 * pulse
 	rune_south.scale.y = 0.08 * pulse
-	if tick_remaining <= 0.0:
+	if not network_visual_replica and tick_remaining <= 0.0:
 		tick_remaining = healing_tick_seconds
 		if owner_player != null and global_position.distance_to(owner_player.global_position) <= spell_config.area_radius:
 			owner_player.restore_health(spell_config.damage_or_healing * healing_tick_seconds / maxf(1.0, spell_config.base_spell.effect_duration_seconds))

@@ -6,6 +6,7 @@ var config: RuntimeSpellConfig
 var elapsed: float = 0.0
 var tick_remaining: float = 0.0
 var detonated: bool = false
+var network_visual_replica := false
 
 @onready var collision_shape: CollisionShape3D = %CollisionShape3D
 @onready var field_mesh: MeshInstance3D = %FieldMesh
@@ -16,6 +17,11 @@ func configure(owner_node: PlayerController, spell_config: RuntimeSpellConfig) -
 	config = spell_config
 	if is_node_ready():
 		_apply_configuration()
+
+
+func configure_network_visual(spell_config: RuntimeSpellConfig) -> void:
+	network_visual_replica = true
+	configure(null, spell_config)
 
 func _ready() -> void:
 	if config != null:
@@ -45,7 +51,7 @@ func _physics_process(delta: float) -> void:
 	tick_remaining -= delta
 	rune_ring.rotation.y += delta * 1.8
 	rune_ring.scale.y = 1.0 + sin(elapsed * 4.0) * 0.08
-	if tick_remaining <= 0.0:
+	if not network_visual_replica and tick_remaining <= 0.0:
 		tick_remaining = 0.45
 		_apply_tick()
 	if elapsed >= maxf(0.8, config.effect_duration):

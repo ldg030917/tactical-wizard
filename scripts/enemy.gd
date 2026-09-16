@@ -123,7 +123,7 @@ func _physics_process(delta: float) -> void:
 	_update_status(delta)
 	if dead:
 		return
-	if player == null or not is_instance_valid(player):
+	if player == null or not is_instance_valid(player) or player.dead:
 		_find_player()
 		return
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)

@@ -16,6 +16,7 @@ var network_peer_id := 1
 var authoritative_loadout: Dictionary = {}
 var authoritative_spell_pages: Array = []
 var authoritative_character_id := ""
+var authoritative_skills: Dictionary = {}
 var _network_move_input := Vector2.ZERO
 var _network_sprint := false
 var _network_crouch := false
@@ -139,6 +140,9 @@ func _ready() -> void:
 	max_health = base_max_health + GameState.skill_bonus("health")
 	max_mana = base_max_mana
 	max_stamina = base_max_stamina + GameState.skill_bonus("stamina")
+	if network_enabled:
+		max_health = base_max_health + _skill_bonus("health")
+		max_stamina = base_max_stamina + _skill_bonus("stamina")
 	var character := _selected_character()
 	if character != null:
 		max_health *= character.health_multiplier
@@ -175,6 +179,7 @@ func configure_network(peer_id: int, loadout_snapshot: Dictionary = {}) -> void:
 	authoritative_loadout = loadout_snapshot.get("loadout", {}).duplicate(true)
 	authoritative_spell_pages = loadout_snapshot.get("spell_pages", []).duplicate(true)
 	authoritative_character_id = str(loadout_snapshot.get("selected_character_id", ""))
+	authoritative_skills = loadout_snapshot.get("skills", {}).duplicate(true)
 
 
 func _loadout() -> Dictionary:
@@ -190,6 +195,16 @@ func _selected_character() -> CharacterData:
 	return ContentRegistry.characters().get(character_id) as CharacterData
 
 
+func _skill_bonus(skill_id: String) -> float:
+	if not network_enabled:
+		return GameState.skill_bonus(skill_id)
+	var skill := ContentRegistry.skills().get(skill_id) as SkillData
+	if skill == null:
+		return 0.0
+	var value := float(authoritative_skills.get(skill_id, 0)) * skill.benefit_per_rank
+	return value / 100.0 if skill.benefit_mode == "percent" else value
+
+
 func _spell_config_for_page(page_index: int) -> RuntimeSpellConfig:
 	var pages := _spell_pages()
 	if page_index < 0 or page_index >= pages.size():
@@ -201,7 +216,11 @@ func _spell_config_for_page(page_index: int) -> RuntimeSpellConfig:
 		var modifier := ItemDB.modifier(str(modifier_id))
 		if modifier != null:
 			modifiers.append(modifier)
-	return RuntimeSpellConfig.build(spell, modifiers, ItemDB.spellbook(str(_loadout().get("spellbook", ""))), ItemDB.focus(str(_loadout().get("focus", ""))), true)
+	var config := RuntimeSpellConfig.build(spell, modifiers, ItemDB.spellbook(str(_loadout().get("spellbook", ""))), ItemDB.focus(str(_loadout().get("focus", ""))), true)
+	if config.valid:
+		config.cast_time *= 1.0 - _skill_bonus("casting_speed")
+		config.damage_or_healing *= 1.0 + _skill_bonus("accuracy")
+	return config
 
 
 func is_local_network_player() -> bool:
@@ -301,12 +320,16 @@ func _unhandled_input(event: InputEvent) -> void:
 func _network_physics_process(delta: float) -> void:
 	if multiplayer.is_server():
 		rotation.y = _network_rotation_y
-		# The headless server owns combat timing even though it skips visual casts.
-		_tick_combat_cooldowns(delta)
 		if dead:
+			# A lethal hit must invalidate an in-flight cast before it can complete
+			# on the next authoritative physics tick.
+			if casting:
+				cancel_cast()
 			velocity = velocity.move_toward(Vector3.ZERO, delta * 8.0)
 			move_and_slide()
 			return
+		# Casting time, cancellation and completion are authoritative server state.
+		_update_casting(delta)
 		_apply_movement_input(_network_move_input, _network_sprint, _network_crouch, _network_focus, delta)
 		_update_status(delta)
 		return
@@ -367,12 +390,17 @@ func _handle_network_input(event: InputEvent) -> void:
 			request_dagger_attack.rpc_id(1)
 		else:
 			var config := current_spell_config()
+			if config != null and config.base_spell.spell_id == "explosion":
+				_show_message("대폭발은 현재 멀티플레이에서 사용할 수 없습니다.")
+				return
 			print("[CAST_INPUT] peer=%d page=%d spell=%s" % [network_peer_id, selected_page, config.base_spell.spell_id if config != null else "invalid"])
 			print("[CAST_REQUEST] peer=%d page=%d aim_origin=%s aim_direction=%s" % [network_peer_id, selected_page, str(_network_aim_origin), str(_network_aim_direction)])
 			_log_network_cast_aim()
 			request_spell_cast.rpc_id(1, selected_page, _network_aim_origin, _network_aim_direction)
 	elif event.is_action_pressed("dagger_attack"):
 		request_dagger_attack.rpc_id(1)
+	elif event.is_action_pressed("cancel_cast"):
+		request_cancel_spell_cast.rpc_id(1)
 	elif event.is_action_pressed("inventory") and in_raid:
 		var raid: Node = _gameplay_area()
 		if raid.has_method("toggle_inventory"):
@@ -380,9 +408,9 @@ func _handle_network_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("interact"):
 		_interact()
 	elif (event.is_action_pressed("heal") or event.is_action_pressed("quick_item_1")) and in_raid:
-		quick_heal()
+		request_use_raid_consumable.rpc_id(1, "health")
 	elif event.is_action_pressed("quick_item_2") and in_raid:
-		use_mana_consumable()
+		request_use_raid_consumable.rpc_id(1, "mana_potion")
 
 
 @rpc("any_peer", "call_remote", "unreliable", 1)
@@ -401,6 +429,21 @@ func submit_movement_input(input: Vector2, rotation_y: float, aim_pitch: float, 
 func request_dagger_attack() -> void:
 	if multiplayer.is_server() and multiplayer.get_remote_sender_id() == network_peer_id and in_raid:
 		dagger_attack()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_cancel_spell_cast() -> void:
+	if multiplayer.is_server() and multiplayer.get_remote_sender_id() == network_peer_id:
+		cancel_cast()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_use_raid_consumable(item_id: String) -> void:
+	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != network_peer_id:
+		return
+	var raid := _gameplay_area()
+	if raid.has_method("consume_network_raid_item"):
+		raid.consume_network_raid_item(network_peer_id, item_id)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -428,12 +471,13 @@ func request_spell_cast(page_index: int, reported_aim_origin: Vector3, reported_
 		print("[CAST_REJECT] peer=%d spell=%s reason=invalid_aim_origin" % [network_peer_id, config.base_spell.spell_id])
 		return
 	var requested_target := _server_aim_target(reported_aim_origin, reported_aim_direction.normalized(), config.range_meters)
-	var projectile_direction := (requested_target - cast_origin.global_position).normalized()
-	print("[AIM] server cast peer=%d aim_origin=%s aim_direction=%s muzzle=%s target=%s projectile_dir=%s" % [network_peer_id, str(reported_aim_origin), str(reported_aim_direction.normalized()), str(cast_origin.global_position), str(requested_target), str(projectile_direction)])
-	if cast_selected_spell_immediate(requested_target):
-		print("[CAST_ACCEPT] peer=%d spell=%s cooldown=%.3f mana=%.2f" % [network_peer_id, config.base_spell.spell_id, cooldown_remaining(), mana])
+	aim_point = requested_target
+	print("[AIM] server cast peer=%d aim_origin=%s aim_direction=%s muzzle=%s target=%s" % [network_peer_id, str(reported_aim_origin), str(reported_aim_direction.normalized()), str(cast_origin.global_position), str(requested_target)])
+	if begin_cast():
+		cast_target = requested_target
+		print("[CAST_ACCEPT] peer=%d spell=%s duration=%.3f" % [network_peer_id, config.base_spell.spell_id, cast_duration])
 	else:
-		print("[CAST_REJECT] peer=%d spell=%s reason=state_changed_during_cast" % [network_peer_id, config.base_spell.spell_id])
+		print("[CAST_REJECT] peer=%d spell=%s reason=state_changed_before_cast" % [network_peer_id, config.base_spell.spell_id])
 
 
 func _log_network_cast_aim() -> void:
@@ -466,7 +510,7 @@ func receive_network_snapshot(snapshot: Dictionary) -> void:
 			_local_snapshot_rotation_suppressed_logged = true
 		health = float(snapshot.get("health", health))
 		mana = float(snapshot.get("mana", mana))
-		dead = bool(snapshot.get("dead", dead))
+		_apply_network_gameplay_state(snapshot)
 		_apply_network_cooldowns(snapshot)
 		return
 	_snapshot_buffer.append({
@@ -476,6 +520,7 @@ func receive_network_snapshot(snapshot: Dictionary) -> void:
 		"aim_pitch": snapshot.get("aim_pitch", _network_aim_pitch),
 		"health": snapshot.get("health", health),
 		"mana": snapshot.get("mana", mana),
+		"gameplay": snapshot.duplicate(true),
 		"dead": snapshot.get("dead", dead)
 	})
 	while _snapshot_buffer.size() > 12:
@@ -500,7 +545,39 @@ func _apply_remote_snapshot(_delta: float) -> void:
 	wand_socket.rotation.x = lerpf(wand_socket.rotation.x, _network_aim_pitch * 0.45, 0.22)
 	health = lerpf(float(first.health), float(second.health), alpha)
 	mana = lerpf(float(first.mana), float(second.mana), alpha)
-	dead = bool(second.dead)
+	_apply_network_gameplay_state(second.get("gameplay", second))
+
+
+func _apply_network_gameplay_state(snapshot: Dictionary) -> void:
+	stamina = float(snapshot.get("stamina", stamina))
+	ward = float(snapshot.get("ward", ward))
+	var snapshot_injuries: Variant = snapshot.get("injuries", null)
+	if snapshot_injuries is Dictionary:
+		injuries = snapshot_injuries.duplicate(true)
+	bleeding = bool(snapshot.get("bleeding", bleeding))
+	burn_remaining = float(snapshot.get("burn_remaining", burn_remaining))
+	poison_remaining = float(snapshot.get("poison_remaining", poison_remaining))
+	slow_remaining = float(snapshot.get("slow_remaining", slow_remaining))
+	exhaustion_remaining = float(snapshot.get("exhaustion_remaining", exhaustion_remaining))
+	is_sprinting = bool(snapshot.get("sprinting", is_sprinting))
+	is_crouching = bool(snapshot.get("crouching", is_crouching))
+	is_focused = bool(snapshot.get("focused", is_focused))
+	casting = bool(snapshot.get("casting", casting))
+	cast_elapsed = float(snapshot.get("cast_elapsed", cast_elapsed))
+	cast_duration = float(snapshot.get("cast_duration", cast_duration))
+	if not is_local_network_player() or casting:
+		selected_page = clampi(int(snapshot.get("selected_page", selected_page)), 0, maxi(0, page_configs.size() - 1))
+		active_combat_slot = clampi(int(snapshot.get("active_combat_slot", active_combat_slot)), 0, 3)
+	cast_glow.visible = casting
+	if casting:
+		var config := current_spell_config()
+		if config != null and config.valid:
+			var charge := clampf(cast_elapsed / maxf(0.01, cast_duration), 0.0, 1.0)
+			cast_glow.material_override = VisualFactory.elemental_spell_material(config.base_spell.primary_element, config.base_spell.debug_color, 5.0, float(posmod(config.base_spell.spell_id.hash(), 1000)) / 67.0)
+			cast_glow.scale = Vector3.ONE * lerpf(0.55, 1.75, charge)
+	else:
+		cast_glow.scale = Vector3.ONE
+	dead = bool(snapshot.get("dead", dead))
 
 func _configure_equipment_stats() -> void:
 	armor = 0.0
@@ -807,6 +884,8 @@ func _cast_rejection_reason(config: RuntimeSpellConfig) -> String:
 	if cooldown_remaining() > 0.001:
 		return "cooldown"
 	var is_explosion := config.base_spell.spell_id == "explosion"
+	if is_explosion:
+		return "explosion_disabled"
 	if is_explosion and not in_raid:
 		return "explosion_outside_raid"
 	if is_explosion and not GameState.can_use_explosion():
@@ -820,6 +899,8 @@ func _cast_rejection_reason(config: RuntimeSpellConfig) -> String:
 
 func _match_cast_rejection_message(reason: String) -> void:
 	match reason:
+		"explosion_disabled":
+			_show_message("대폭발은 현재 사용할 수 없습니다.")
 		"explosion_outside_raid":
 			_show_message("Explosion can only be invoked during an expedition.")
 		"explosion_already_used":
@@ -984,7 +1065,7 @@ func _apply_random_injury(severity: float) -> void:
 	injury_changed.emit(body_part, float(injuries[body_part]))
 
 func restore_health(amount: float) -> void:
-	health = minf(max_health, health + amount * (1.0 + GameState.skill_bonus("healing")))
+	health = minf(max_health, health + amount * (1.0 + _skill_bonus("healing")))
 	health_changed.emit()
 
 func restore_mana(amount: float) -> void:
@@ -1212,6 +1293,7 @@ func _die() -> void:
 	if dead:
 		return
 	dead = true
+	cancel_cast()
 	velocity = Vector3.ZERO
 	var tween := create_tween()
 	tween.tween_property(visual, "rotation:z", 1.42, 0.48)

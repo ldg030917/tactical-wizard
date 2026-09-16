@@ -5,6 +5,7 @@ const REGION_GRAPH := preload("res://scripts/regions/region_graph.gd")
 const ELEMENTAL_SPELL_FIELD := preload("res://scenes/spells/elemental_spell_field.tscn")
 const EXPLOSION_CUTSCENE: VideoStream = preload("res://assets/cutscenes/explosion.ogv")
 const EXPLOSION_SCREEN_SHADER: Shader = preload("res://shaders/explosion_screen.gdshader")
+const EXPLOSION_GAMEPLAY_ENABLED := false
 
 @export_category("Runtime Scenes")
 @export var player_scene: PackedScene
@@ -61,16 +62,22 @@ var explosion_devastated: bool = false
 var network_players: Dictionary = {}
 var network_enemies: Dictionary = {}
 var network_loot_containers: Dictionary = {}
+var network_raid_inventories: Dictionary = {}
+var network_raid_secure: Dictionary = {}
 var network_projectiles: Dictionary = {}
 var network_projectile_spawn_data: Dictionary = {}
+var network_area_effects: Dictionary = {}
 var network_snapshot_elapsed := 0.0
 var network_raid_active := false
 ## Assigned by Main before the scene enters the tree. All network fan-out for
 ## this world is scoped to this session rather than connected peers globally.
 var raid_session_id := ""
+var network_restore_states: Dictionary = {}
+var network_restored_kills: Dictionary = {}
 var _next_network_enemy_id := 1
 var _next_network_magic_id := 1
 var _next_network_loot_id := 1
+var _next_network_area_effect_id := 1
 
 const GRASS_WALL_PLACEMENTS: Array[Dictionary] = [
 	{"position":Vector3(-12, 1.4, -4), "rotation":0.0},
@@ -83,8 +90,11 @@ const GRASS_WALL_PLACEMENTS: Array[Dictionary] = [
 
 func _ready() -> void:
 	rng.randomize()
-	kills = GameState.raid_kills
-	_configure_weather()
+	kills = network_restored_kills.duplicate(true) if not network_restored_kills.is_empty() else GameState.raid_kills
+	if NetworkManager.is_network_game() and not multiplayer.is_server():
+		_apply_weather(weather_options[0] if not weather_options.is_empty() else "Clear")
+	else:
+		_configure_weather()
 	_configure_region()
 	if NetworkManager.is_network_game():
 		_setup_network_raid()
@@ -104,9 +114,16 @@ func _setup_network_raid() -> void:
 	hud.visible = false
 	if multiplayer.is_server():
 		multiplayer.peer_disconnected.connect(_on_network_raid_peer_disconnected)
+		_activate_containers()
 		_spawn_editor_placed_loot()
 		_register_network_loot_containers()
 		_spawn_editor_placed_enemies()
+	else:
+		# Static containers are authoritative server entities. Remove the scene-local
+		# copies before replicated instances arrive to avoid duplicate/interactable loot.
+		for child: Node in loot_containers.get_children():
+			loot_containers.remove_child(child)
+			child.queue_free()
 
 
 func spawn_network_raid_member(peer_id: int) -> void:
@@ -118,18 +135,28 @@ func spawn_network_raid_member(peer_id: int) -> void:
 	_sync_network_world_to_peer(peer_id)
 	var offset_index := network_players.size()
 	var spawn_position := player_spawn.global_position + Vector3(float(offset_index % 3) * 1.25, 0.0, float(offset_index / 3) * 1.25)
-	var loadout_snapshot := NetworkManager.get_peer_loadout(peer_id)
-	_create_network_raid_player(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees), loadout_snapshot)
+	var restore: Dictionary = network_restore_states.get(peer_id, {})
+	var loadout_snapshot: Dictionary = restore.get("profile", NetworkManager.get_peer_loadout(peer_id)).duplicate(true)
+	if restore.has("inventory"):
+		network_raid_inventories[peer_id] = restore.get("inventory", {}).duplicate(true)
+		network_raid_secure[peer_id] = restore.get("secure", {}).duplicate(true)
+	_initialize_network_raid_inventory(peer_id, loadout_snapshot)
+	var player_profile := _sanitize_network_player_profile(loadout_snapshot)
+	var created_player := _create_network_raid_player(peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees), player_profile)
+	if multiplayer.is_server() and not restore.is_empty():
+		created_player.restore_raid_state(restore.get("player_state", {}))
 	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
-		spawn_network_raid_player.rpc_id(target_peer, peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees), loadout_snapshot)
+		spawn_network_raid_player.rpc_id(target_peer, peer_id, spawn_position, deg_to_rad(player_spawn.facing_direction_degrees), player_profile)
+	_sync_network_raid_inventory.rpc_id(peer_id, _network_inventory(peer_id), _network_secure_inventory(peer_id))
 	print("[PLAYER %s] spawn peer=%d players=%s" % [raid_session_id, peer_id, str(network_players.keys())])
 
 
 func _sync_network_world_to_peer(peer_id: int) -> void:
+	configure_network_environment.rpc_id(peer_id, weather, _network_grass_wall_state())
 	for existing_peer: int in network_players:
 		var existing_player := network_players[existing_peer] as PlayerController
 		if is_instance_valid(existing_player):
-			spawn_network_raid_player.rpc_id(peer_id, existing_peer, existing_player.global_position, existing_player.rotation.y, NetworkManager.get_peer_loadout(existing_peer))
+			spawn_network_raid_player.rpc_id(peer_id, existing_peer, existing_player.global_position, existing_player.rotation.y, _network_player_profile(existing_player))
 	for enemy_id: String in network_enemies:
 		var enemy := network_enemies[enemy_id] as EnemyController
 		if is_instance_valid(enemy):
@@ -155,6 +182,8 @@ func _process(delta: float) -> void:
 
 func _process_network_raid(delta: float) -> void:
 	if not multiplayer.is_server():
+		if player != null:
+			_update_visibility()
 		return
 	_update_grass_wall_cycle(delta)
 	network_snapshot_elapsed += delta
@@ -165,7 +194,20 @@ func _process_network_raid(delta: float) -> void:
 	for peer_id: int in network_players:
 		var network_player := network_players[peer_id] as PlayerController
 		if is_instance_valid(network_player):
-			states.append({"peer_id": peer_id, "position": network_player.global_position, "rotation_y": network_player.rotation.y, "aim_pitch": network_player._network_aim_pitch, "health": network_player.health, "mana": network_player.mana, "cooldowns": network_player.page_cooldowns.duplicate(), "dead": network_player.dead})
+			states.append({
+				"peer_id": peer_id, "position": network_player.global_position,
+				"rotation_y": network_player.rotation.y, "aim_pitch": network_player._network_aim_pitch,
+				"health": network_player.health, "mana": network_player.mana, "stamina": network_player.stamina,
+				"ward": network_player.ward, "injuries": network_player.injuries.duplicate(true),
+				"bleeding": network_player.bleeding, "burn_remaining": network_player.burn_remaining,
+				"poison_remaining": network_player.poison_remaining, "slow_remaining": network_player.slow_remaining,
+				"exhaustion_remaining": network_player.exhaustion_remaining,
+				"sprinting": network_player.is_sprinting, "crouching": network_player.is_crouching,
+				"focused": network_player.is_focused, "casting": network_player.casting,
+				"cast_elapsed": network_player.cast_elapsed, "cast_duration": network_player.cast_duration,
+				"selected_page": network_player.selected_page, "active_combat_slot": network_player.active_combat_slot,
+				"cooldowns": network_player.page_cooldowns.duplicate(), "dead": network_player.dead
+			})
 	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
 		receive_network_raid_snapshots.rpc_id(target_peer, states)
 	var enemy_states: Array[Dictionary] = []
@@ -214,6 +256,143 @@ func _create_network_raid_player(peer_id: int, spawn_position: Vector3, spawn_ro
 	return network_player
 
 
+func _initialize_network_raid_inventory(peer_id: int, snapshot: Dictionary) -> void:
+	if network_raid_inventories.has(peer_id):
+		return
+	var inventory: Dictionary = {}
+	var loadout: Dictionary = snapshot.get("loadout", {})
+	for slot: String in ["consumable_1", "consumable_2"]:
+		var item_id := str(loadout.get(slot, ""))
+		if not item_id.is_empty():
+			inventory[item_id] = int(inventory.get(item_id, 0)) + 1
+		loadout[slot] = ""
+	snapshot["loadout"] = loadout
+	network_raid_inventories[peer_id] = inventory
+	network_raid_secure[peer_id] = {}
+
+
+func _network_player_profile(player_controller: PlayerController) -> Dictionary:
+	return {
+		"loadout":player_controller.authoritative_loadout.duplicate(true),
+		"spell_pages":player_controller.authoritative_spell_pages.duplicate(true),
+		"selected_character_id":player_controller.authoritative_character_id,
+		"skills":player_controller.authoritative_skills.duplicate(true)
+	}
+
+
+func _sanitize_network_player_profile(snapshot: Dictionary) -> Dictionary:
+	return {
+		"loadout":snapshot.get("loadout", {}).duplicate(true),
+		"spell_pages":snapshot.get("spell_pages", []).duplicate(true),
+		"selected_character_id":str(snapshot.get("selected_character_id", "")),
+		"skills":snapshot.get("skills", {}).duplicate(true)
+	}
+
+
+func capture_network_travel_state() -> Dictionary:
+	var players: Dictionary = {}
+	for peer_id: int in network_players:
+		var player_controller := network_players[peer_id] as PlayerController
+		if is_instance_valid(player_controller):
+			players[peer_id] = {
+				"profile":_network_player_profile(player_controller),
+				"inventory":_network_inventory(peer_id),
+				"secure":_network_secure_inventory(peer_id),
+				"player_state":player_controller.capture_raid_state()
+			}
+	return {"players":players, "kills":kills.duplicate(true)}
+
+
+func _network_inventory(peer_id: int) -> Dictionary:
+	return network_raid_inventories.get(peer_id, {}).duplicate(true)
+
+
+func _network_secure_inventory(peer_id: int) -> Dictionary:
+	return network_raid_secure.get(peer_id, {}).duplicate(true)
+
+
+func _network_raid_capacity(player_controller: PlayerController, loadout_override: Dictionary = {}) -> int:
+	var result := 10 + int(player_controller._skill_bonus("capacity"))
+	var character := player_controller._selected_character()
+	if character != null:
+		result += character.carrying_capacity_bonus
+	var capacity_loadout := loadout_override if not loadout_override.is_empty() else player_controller._loadout()
+	var pack_id := str(capacity_loadout.get("backpack", ""))
+	if not pack_id.is_empty():
+		result += int(ItemDB.get_item(pack_id).get("capacity", 0))
+	return result
+
+
+func _can_add_network_raid_item(peer_id: int, item_id: String, amount: int = 1) -> bool:
+	var player_controller := network_players.get(peer_id) as PlayerController
+	if not is_instance_valid(player_controller):
+		return false
+	var candidate := _network_inventory(peer_id)
+	candidate[item_id] = int(candidate.get(item_id, 0)) + amount
+	return GameState.inventory_slots(candidate) <= _network_raid_capacity(player_controller)
+
+
+func _add_network_raid_item(peer_id: int, item_id: String, amount: int = 1) -> bool:
+	if not _can_add_network_raid_item(peer_id, item_id, amount):
+		return false
+	var inventory := _network_inventory(peer_id)
+	inventory[item_id] = int(inventory.get(item_id, 0)) + amount
+	network_raid_inventories[peer_id] = inventory
+	return true
+
+
+func _remove_network_raid_item(peer_id: int, item_id: String, amount: int = 1) -> bool:
+	var inventory := _network_inventory(peer_id)
+	if int(inventory.get(item_id, 0)) < amount:
+		return false
+	inventory[item_id] = int(inventory[item_id]) - amount
+	if int(inventory[item_id]) <= 0:
+		inventory.erase(item_id)
+	network_raid_inventories[peer_id] = inventory
+	return true
+
+
+func consume_network_raid_item(peer_id: int, requested_item: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var player_controller := network_players.get(peer_id) as PlayerController
+	if not is_instance_valid(player_controller) or player_controller.dead:
+		return
+	var item_id := requested_item
+	if requested_item == "health":
+		item_id = "health_potion"
+		if int(_network_inventory(peer_id).get(item_id, 0)) <= 0:
+			item_id = "bandage" if int(_network_inventory(peer_id).get("bandage", 0)) > 0 else "medkit"
+	if not _remove_network_raid_item(peer_id, item_id, 1):
+		_network_raid_message.rpc_id(peer_id, "사용 가능한 소비 아이템이 없습니다.")
+		return
+	var info := ItemDB.get_item(item_id)
+	player_controller.restore_health(float(info.get("heal", 0.0)))
+	player_controller.restore_mana(float(info.get("mana_restore", 0.0)))
+	if bool(info.get("stops_bleed", false)):
+		player_controller.bleeding = false
+		for body_part: String in player_controller.injuries.keys():
+			player_controller.injuries[body_part] = maxf(0.0, float(player_controller.injuries[body_part]) - 0.2)
+	_sync_network_raid_inventory.rpc_id(peer_id, _network_inventory(peer_id), _network_secure_inventory(peer_id))
+
+
+@rpc("authority", "call_remote", "reliable")
+func _sync_network_raid_inventory(inventory: Dictionary, secure_inventory: Dictionary) -> void:
+	if multiplayer.is_server():
+		return
+	GameState.raid_inventory = inventory.duplicate(true)
+	GameState.raid_secure = secure_inventory.duplicate(true)
+	GameState.state_changed.emit()
+	if hud != null and hud.visible:
+		hud.refresh_inventory()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _network_raid_message(text: String) -> void:
+	if not multiplayer.is_server():
+		show_message(text)
+
+
 func _network_enemy_spawn_data(enemy: EnemyController) -> Dictionary:
 	return {
 		"enemy_id": enemy.network_enemy_id,
@@ -231,7 +410,7 @@ func _register_network_loot_containers() -> void:
 	if not multiplayer.is_server():
 		return
 	for child: Node in loot_containers.get_children():
-		if not child is LootContainer:
+		if not child is LootContainer or not child.visible or child.process_mode == Node.PROCESS_MODE_DISABLED:
 			continue
 		_register_network_loot_container(child as LootContainer)
 
@@ -274,6 +453,12 @@ func _serialize_spell_config(config: RuntimeSpellConfig) -> Dictionary:
 		"range": config.range_meters,
 		"speed": config.projectile_speed,
 		"radius": config.area_radius,
+		"behavior": config.behavior_type,
+		"effect_duration": config.effect_duration,
+		"effect_power": config.effect_power,
+		"status_effect": config.status_effect,
+		"secondary_power": config.secondary_power,
+		"projectile_count": config.projectile_count,
 		"trajectory": config.trajectory,
 		"tags": config.behavior_tags,
 		"pierce": config.pierce_count,
@@ -290,6 +475,12 @@ func _deserialize_spell_config(data: Dictionary) -> RuntimeSpellConfig:
 	config.range_meters = float(data.get("range", config.range_meters))
 	config.projectile_speed = float(data.get("speed", config.projectile_speed))
 	config.area_radius = float(data.get("radius", config.area_radius))
+	config.behavior_type = str(data.get("behavior", config.behavior_type))
+	config.effect_duration = float(data.get("effect_duration", config.effect_duration))
+	config.effect_power = float(data.get("effect_power", config.effect_power))
+	config.status_effect = str(data.get("status_effect", config.status_effect))
+	config.secondary_power = float(data.get("secondary_power", config.secondary_power))
+	config.projectile_count = int(data.get("projectile_count", config.projectile_count))
 	config.trajectory = str(data.get("trajectory", config.trajectory))
 	config.pierce_count = int(data.get("pierce", config.pierce_count))
 	config.ricochet_count = int(data.get("ricochet", config.ricochet_count))
@@ -370,6 +561,103 @@ func request_network_loot_open(container: LootContainer) -> void:
 		_request_network_loot_open.rpc_id(1, container.network_loot_id)
 
 
+func request_network_region_travel(destination_region_id: String) -> void:
+	if NetworkManager.is_connected_to_server():
+		_request_network_region_travel.rpc_id(1, destination_region_id)
+
+
+func request_network_inventory_action(action: String, item_id: String) -> void:
+	if NetworkManager.is_connected_to_server():
+		_request_network_inventory_action.rpc_id(1, action, item_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_network_inventory_action(action: String, item_id: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var peer_id := multiplayer.get_remote_sender_id()
+	if not network_players.has(peer_id):
+		return
+	if action == "use":
+		consume_network_raid_item(peer_id, item_id)
+		return
+	if action == "discard":
+		if _remove_network_raid_item(peer_id, item_id):
+			_sync_network_raid_inventory.rpc_id(peer_id, _network_inventory(peer_id), _network_secure_inventory(peer_id))
+		return
+	if action == "secure":
+		var info := ItemDB.get_item(item_id)
+		var secure := _network_secure_inventory(peer_id)
+		var candidate := secure.duplicate(true)
+		_dictionary_add_item(candidate, item_id)
+		if info.is_empty() or not bool(info.get("secure_eligible", true)) or GameState.inventory_slots(candidate) > 2:
+			_network_raid_message.rpc_id(peer_id, "보호 슬롯에 넣을 수 없습니다.")
+			return
+		if _remove_network_raid_item(peer_id, item_id):
+			network_raid_secure[peer_id] = candidate
+			_sync_network_raid_inventory.rpc_id(peer_id, _network_inventory(peer_id), candidate)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_network_region_travel(destination_region_id: String) -> void:
+	if not multiplayer.is_server() or NetworkManager.is_region_transitioning(raid_session_id):
+		return
+	var peer_id := multiplayer.get_remote_sender_id()
+	var player_controller := network_players.get(peer_id) as PlayerController
+	var region := ContentRegistry.regions().get(destination_region_id) as RegionData
+	if not is_instance_valid(player_controller) or player_controller.dead or region == null or not REGION_GRAPH.are_connected(region_id, destination_region_id):
+		_reject_network_region_travel.rpc_id(peer_id, "이동할 수 없는 지역입니다.")
+		return
+	var profile := NetworkManager.get_peer_loadout(peer_id)
+	var original_profile := profile.duplicate(true)
+	var visited: Array = profile.get("visited_regions", []).duplicate()
+	var first_visit := destination_region_id not in visited
+	if first_visit and int(profile.get("currency", 0)) < region.entry_cost:
+		_reject_network_region_travel.rpc_id(peer_id, "지역 입장 비용이 부족합니다.")
+		return
+	var required_ticket := region.required_ticket_id
+	var inventory := _network_inventory(peer_id)
+	var original_inventory := inventory.duplicate(true)
+	var stash: Dictionary = profile.get("stash", {}).duplicate(true)
+	if first_visit and not required_ticket.is_empty() and int(inventory.get(required_ticket, 0)) <= 0 and int(stash.get(required_ticket, 0)) <= 0:
+		_reject_network_region_travel.rpc_id(peer_id, "필요한 입장 아이템이 없습니다.")
+		return
+	if first_visit:
+		profile["currency"] = int(profile.get("currency", 0)) - region.entry_cost
+	if first_visit and not required_ticket.is_empty():
+		if not _dictionary_remove_item(inventory, required_ticket):
+			_dictionary_remove_item(stash, required_ticket)
+		profile["stash"] = stash
+		network_raid_inventories[peer_id] = inventory
+	var session_members := NetworkManager.get_session_members(raid_session_id)
+	var original_member_profiles: Dictionary = {}
+	for member_peer: int in session_members:
+		var member_profile := profile if member_peer == peer_id else NetworkManager.get_peer_loadout(member_peer)
+		original_member_profiles[member_peer] = original_profile if member_peer == peer_id else member_profile.duplicate(true)
+		var member_visited: Array = member_profile.get("visited_regions", []).duplicate()
+		if destination_region_id not in member_visited:
+			member_visited.append(destination_region_id)
+		member_profile["visited_regions"] = member_visited
+		NetworkManager.update_peer_profile(member_peer, member_profile)
+	NetworkManager.server_sync_client_profile(peer_id, inventory)
+	var root := get_tree().current_scene
+	if not root.has_method("begin_network_region_transition") or not root.begin_network_region_transition(destination_region_id):
+		for member_peer: int in session_members:
+			NetworkManager.update_peer_profile(member_peer, original_member_profiles.get(member_peer, {}))
+		network_raid_inventories[peer_id] = original_inventory
+		NetworkManager.server_sync_client_profile(peer_id, original_inventory)
+		_reject_network_region_travel.rpc_id(peer_id, "현재 지역을 전환할 수 없습니다.")
+
+
+@rpc("authority", "call_remote", "reliable")
+func _reject_network_region_travel(message: String) -> void:
+	if multiplayer.is_server():
+		return
+	if player != null:
+		player.set_physics_process(true)
+	show_message(message)
+
+
 @rpc("any_peer", "call_remote", "reliable")
 func _request_network_loot_open(loot_id: String) -> void:
 	if not multiplayer.is_server():
@@ -401,10 +689,15 @@ func _request_network_loot_take(loot_id: String, item_id: String) -> void:
 		return
 	if network_player.global_position.distance_to(container.global_position) > 2.5 or int(container.contents.get(item_id, 0)) <= 0:
 		return
+	if not _add_network_raid_item(peer_id, item_id, 1):
+		_network_raid_message.rpc_id(peer_id, "현장 가방이 가득 찼습니다.")
+		return
 	container.contents[item_id] = int(container.contents[item_id]) - 1
 	if int(container.contents[item_id]) <= 0:
 		container.contents.erase(item_id)
-	_network_loot_item_granted.rpc_id(peer_id, loot_id, item_id)
+	_sync_network_raid_inventory.rpc_id(peer_id, _network_inventory(peer_id), _network_secure_inventory(peer_id))
+	for member_peer: int in NetworkManager.get_session_members(raid_session_id):
+		_network_loot_state_updated.rpc_id(member_peer, loot_id, container.contents.duplicate(true))
 	_send_network_loot_state(peer_id, container)
 
 
@@ -436,6 +729,18 @@ func _network_loot_item_granted(loot_id: String, item_id: String) -> void:
 	var container := network_loot_containers.get(loot_id) as LootContainer
 	if is_instance_valid(container):
 		container.item_taken.emit(item_id, 1)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _network_loot_state_updated(loot_id: String, contents: Dictionary) -> void:
+	if multiplayer.is_server():
+		return
+	var container := network_loot_containers.get(loot_id) as LootContainer
+	if not is_instance_valid(container):
+		return
+	container.contents = contents.duplicate(true)
+	if hud != null and hud.selected_container == container:
+		hud.refresh_loot()
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -502,6 +807,57 @@ func spawn_network_projectile(spawn_data: Dictionary) -> void:
 	network_projectiles[magic_id] = projectile
 	projectile.projectile_resolved.connect(_on_network_projectile_replica_resolved)
 	print("[MAGIC] client replicated id=%s local_peer=%d type=%s position=%s" % [magic_id, multiplayer.get_unique_id(), config.base_spell.spell_id, str(start)])
+
+
+func _register_network_area_effect(effect_node: Node, effect_kind: String, config: RuntimeSpellConfig, at: Vector3, rotation_y: float) -> void:
+	if not multiplayer.is_server() or effect_node == null:
+		return
+	var effect_id := "area_%d" % _next_network_area_effect_id
+	_next_network_area_effect_id += 1
+	network_area_effects[effect_id] = effect_node
+	effect_node.tree_exited.connect(_on_network_area_effect_exited.bind(effect_id), CONNECT_ONE_SHOT)
+	for peer_id: int in NetworkManager.get_session_members(raid_session_id):
+		spawn_network_area_effect.rpc_id(peer_id, effect_id, effect_kind, _serialize_spell_config(config), at, rotation_y)
+
+
+func _on_network_area_effect_exited(effect_id: String) -> void:
+	if not multiplayer.is_server() or not network_area_effects.has(effect_id):
+		return
+	network_area_effects.erase(effect_id)
+	for peer_id: int in NetworkManager.get_session_members(raid_session_id):
+		despawn_network_area_effect.rpc_id(peer_id, effect_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func spawn_network_area_effect(effect_id: String, effect_kind: String, config_data: Dictionary, at: Vector3, rotation_y: float) -> void:
+	if multiplayer.is_server():
+		return
+	var config := _deserialize_spell_config(config_data)
+	if config == null:
+		return
+	if effect_kind == "healing" and config.base_spell.area_scene != null:
+		var circle := config.base_spell.area_scene.instantiate() as HealingCircle
+		temporary_effects.add_child(circle)
+		circle.global_position = at
+		circle.configure_network_visual(config)
+		network_area_effects[effect_id] = circle
+	elif effect_kind == "field":
+		var field := ELEMENTAL_SPELL_FIELD.instantiate() as ElementalSpellField
+		temporary_effects.add_child(field)
+		field.global_position = at
+		field.rotation.y = rotation_y
+		field.configure_network_visual(config)
+		network_area_effects[effect_id] = field
+
+
+@rpc("authority", "call_remote", "reliable")
+func despawn_network_area_effect(effect_id: String) -> void:
+	if multiplayer.is_server():
+		return
+	var effect: Variant = network_area_effects.get(effect_id)
+	network_area_effects.erase(effect_id)
+	if is_instance_valid(effect):
+		(effect as Node).queue_free()
 
 
 func _on_network_projectile_replica_resolved(magic_id: String, _reason: String) -> void:
@@ -587,6 +943,8 @@ func _spawn_region_hazards() -> void:
 			temporary_effects.add_child(hazard)
 			hazard.global_position = position
 	elif hazard_type == "temporary_grass_walls" and temporary_grass_wall_scene != null:
+		if NetworkManager.is_network_game() and not multiplayer.is_server():
+			return
 		grass_wall_refresh_remaining = grass_wall_refresh_seconds
 		_refresh_grass_walls()
 
@@ -617,9 +975,48 @@ func _refresh_grass_walls() -> void:
 		wall.global_position = placement.position
 		wall.rotation_degrees.y = float(placement.rotation) + rng.randf_range(-12.0, 12.0)
 	grass_wall_generation += 1
+	if NetworkManager.is_network_game() and multiplayer.is_server() and not raid_session_id.is_empty():
+		var wall_state := _network_grass_wall_state()
+		for peer_id: int in NetworkManager.get_session_members(raid_session_id):
+			sync_network_grass_walls.rpc_id(peer_id, wall_state)
+
+
+func _network_grass_wall_state() -> Array[Dictionary]:
+	var state: Array[Dictionary] = []
+	for child: Node in temporary_effects.get_children():
+		if child is TemporaryGrassWall:
+			state.append({"position":(child as Node3D).global_position, "rotation_y":(child as Node3D).rotation.y})
+	return state
+
+
+@rpc("authority", "call_remote", "reliable")
+func configure_network_environment(server_weather: String, grass_walls: Array[Dictionary]) -> void:
+	if multiplayer.is_server():
+		return
+	_apply_weather(server_weather)
+	sync_network_grass_walls(grass_walls)
+
+
+@rpc("authority", "call_remote", "reliable")
+func sync_network_grass_walls(wall_state: Array[Dictionary]) -> void:
+	if multiplayer.is_server() or temporary_grass_wall_scene == null:
+		return
+	for child: Node in temporary_effects.get_children():
+		if child is TemporaryGrassWall:
+			temporary_effects.remove_child(child)
+			child.queue_free()
+	for entry: Dictionary in wall_state:
+		var wall := temporary_grass_wall_scene.instantiate() as TemporaryGrassWall
+		temporary_effects.add_child(wall)
+		wall.global_position = entry.get("position", Vector3.ZERO)
+		wall.rotation.y = float(entry.get("rotation_y", 0.0))
 
 func _configure_weather() -> void:
-	weather = weather_options[rng.randi_range(0, weather_options.size() - 1)] if not weather_options.is_empty() else "Clear"
+	_apply_weather(weather_options[rng.randi_range(0, weather_options.size() - 1)] if not weather_options.is_empty() else "Clear")
+
+
+func _apply_weather(selected_weather: String) -> void:
+	weather = selected_weather
 	var environment := world_environment.environment.duplicate() as Environment
 	world_environment.environment = environment
 	match weather:
@@ -715,6 +1112,9 @@ func equip_raid_item(item_id: String) -> void:
 	equip_raid_item_to_slot(item_id, slot)
 
 func equip_raid_spell_to_page(item_id: String, page_index: int) -> bool:
+	if NetworkManager.is_connected_to_server():
+		_request_network_loadout_change.rpc_id(1, "equip_spell", item_id, "", page_index, -1)
+		return true
 	if page_index < 0 or page_index >= GameState.spell_pages.size() or ItemDB.spell(item_id) == null or not GameState.remove_raid_item(item_id, 1):
 		return false
 	var old_spell: String = str(GameState.spell_pages[page_index].get("spell_item", ""))
@@ -730,6 +1130,9 @@ func equip_raid_spell_to_page(item_id: String, page_index: int) -> bool:
 	return true
 
 func equip_raid_item_to_slot(item_id: String, slot: String) -> bool:
+	if NetworkManager.is_connected_to_server():
+		_request_network_loadout_change.rpc_id(1, "equip_slot", item_id, slot, -1, -1)
+		return true
 	var category: String = str(ItemDB.get_item(item_id).get("category", ""))
 	var accepted: Array = {
 		"spellbook":["spellbook"], "focus":["focus"], "dagger":["dagger", "melee"],
@@ -748,6 +1151,9 @@ func equip_raid_item_to_slot(item_id: String, slot: String) -> bool:
 	return true
 
 func unequip_raid_slot(slot: String) -> bool:
+	if NetworkManager.is_connected_to_server():
+		_request_network_loadout_change.rpc_id(1, "unequip_slot", "", slot, -1, -1)
+		return true
 	var item_id: String = str(GameState.loadout.get(slot, ""))
 	if item_id.is_empty() or not GameState.can_add_raid_item(item_id, 1):
 		return false
@@ -759,6 +1165,9 @@ func unequip_raid_slot(slot: String) -> bool:
 	return true
 
 func install_raid_modifier(page_index: int, item_id: String) -> Dictionary:
+	if NetworkManager.is_connected_to_server():
+		_request_network_loadout_change.rpc_id(1, "install_modifier", item_id, "", page_index, -1)
+		return {"success":true, "message":"서버에 룬 장착을 요청했습니다."}
 	if page_index < 0 or page_index >= GameState.spell_pages.size():
 		return {"success":false, "message":"잘못된 주문 페이지입니다."}
 	var modifier := ItemDB.modifier(item_id)
@@ -780,6 +1189,9 @@ func install_raid_modifier(page_index: int, item_id: String) -> Dictionary:
 	return {"success":true, "message":"룬을 장착했습니다."}
 
 func remove_raid_modifier(page_index: int, modifier_index: int) -> bool:
+	if NetworkManager.is_connected_to_server():
+		_request_network_loadout_change.rpc_id(1, "remove_modifier", "", "", page_index, modifier_index)
+		return true
 	if page_index < 0 or page_index >= GameState.spell_pages.size():
 		return false
 	var installed: Array = GameState.spell_pages[page_index].get("modifiers", [])
@@ -796,6 +1208,117 @@ func remove_raid_modifier(page_index: int, modifier_index: int) -> bool:
 	hud.refresh_inventory()
 	hud.refresh_spell_settings()
 	return true
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_network_loadout_change(operation: String, item_id: String, slot: String, page_index: int, modifier_index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var peer_id := multiplayer.get_remote_sender_id()
+	var player_controller := network_players.get(peer_id) as PlayerController
+	if not is_instance_valid(player_controller) or player_controller.dead:
+		return
+	var loadout := player_controller.authoritative_loadout.duplicate(true)
+	var pages := player_controller.authoritative_spell_pages.duplicate(true)
+	var inventory := _network_inventory(peer_id)
+	var message := "장비 변경이 거부되었습니다."
+	var accepted := false
+	match operation:
+		"equip_spell":
+			if page_index >= 0 and page_index < pages.size() and ItemDB.spell(item_id) != null and _dictionary_remove_item(inventory, item_id):
+				var old_page: Dictionary = pages[page_index]
+				_dictionary_add_item(inventory, str(old_page.get("spell_item", "")))
+				for old_modifier: Variant in old_page.get("modifiers", []):
+					_dictionary_add_item(inventory, str(old_modifier))
+				pages[page_index] = {"spell_item":item_id, "modifiers":[]}
+				accepted = GameState.inventory_slots(inventory) <= _network_raid_capacity(player_controller, loadout)
+				message = "주문식을 장착했습니다."
+		"equip_slot":
+			var category := str(ItemDB.get_item(item_id).get("category", ""))
+			var accepted_categories: Array = {
+				"spellbook":["spellbook"], "focus":["focus"], "dagger":["dagger", "melee"],
+				"head":["armor_head"], "chest":["armor_chest", "armor"],
+				"accessory_1":["accessory"], "accessory_2":["accessory"], "backpack":["backpack"]
+			}.get(slot, [])
+			if category in accepted_categories and _dictionary_remove_item(inventory, item_id):
+				_dictionary_add_item(inventory, str(loadout.get(slot, "")))
+				loadout[slot] = item_id
+				accepted = GameState.inventory_slots(inventory) <= _network_raid_capacity(player_controller, loadout)
+				message = "장비를 교체했습니다."
+		"unequip_slot":
+			var equipped_id := str(loadout.get(slot, ""))
+			if not equipped_id.is_empty():
+				_dictionary_add_item(inventory, equipped_id)
+				loadout[slot] = ""
+				accepted = GameState.inventory_slots(inventory) <= _network_raid_capacity(player_controller, loadout)
+				message = "장비를 해제했습니다."
+		"install_modifier":
+			if page_index >= 0 and page_index < pages.size():
+				var modifier := ItemDB.modifier(item_id)
+				var page: Dictionary = pages[page_index]
+				var spell := ItemDB.spell(str(page.get("spell_item", "")))
+				var installed: Array = page.get("modifiers", []).duplicate()
+				var book := ItemDB.spellbook(str(loadout.get("spellbook", "")))
+				if modifier != null and modifier.is_compatible(spell) and book != null and installed.size() < book.maximum_modifiers_per_page and item_id not in installed and _dictionary_remove_item(inventory, item_id):
+					installed.append(item_id)
+					page["modifiers"] = installed
+					pages[page_index] = page
+					accepted = true
+					message = "룬을 장착했습니다."
+		"remove_modifier":
+			if page_index >= 0 and page_index < pages.size():
+				var page: Dictionary = pages[page_index]
+				var installed: Array = page.get("modifiers", []).duplicate()
+				if modifier_index >= 0 and modifier_index < installed.size():
+					_dictionary_add_item(inventory, str(installed[modifier_index]))
+					installed.remove_at(modifier_index)
+					page["modifiers"] = installed
+					pages[page_index] = page
+					accepted = GameState.inventory_slots(inventory) <= _network_raid_capacity(player_controller)
+					message = "룬을 해제했습니다."
+	if not accepted:
+		_network_raid_message.rpc_id(peer_id, message)
+		return
+	player_controller.authoritative_loadout = loadout
+	player_controller.authoritative_spell_pages = pages
+	network_raid_inventories[peer_id] = inventory
+	player_controller._configure_equipment_stats()
+	player_controller._rebuild_spell_pages()
+	_apply_network_loadout_state.rpc_id(peer_id, loadout, pages, inventory, message)
+
+
+func _dictionary_add_item(inventory: Dictionary, item_id: String, amount: int = 1) -> void:
+	if item_id.is_empty() or amount <= 0:
+		return
+	inventory[item_id] = int(inventory.get(item_id, 0)) + amount
+
+
+func _dictionary_remove_item(inventory: Dictionary, item_id: String, amount: int = 1) -> bool:
+	if item_id.is_empty() or amount <= 0 or int(inventory.get(item_id, 0)) < amount:
+		return false
+	inventory[item_id] = int(inventory[item_id]) - amount
+	if int(inventory[item_id]) <= 0:
+		inventory.erase(item_id)
+	return true
+
+
+@rpc("authority", "call_remote", "reliable")
+func _apply_network_loadout_state(loadout: Dictionary, pages: Array, inventory: Dictionary, message: String) -> void:
+	if multiplayer.is_server() or player == null:
+		return
+	GameState.loadout = loadout.duplicate(true)
+	GameState.spell_pages = pages.duplicate(true)
+	GameState.raid_inventory = inventory.duplicate(true)
+	player.authoritative_loadout = loadout.duplicate(true)
+	player.authoritative_spell_pages = pages.duplicate(true)
+	player._configure_equipment_stats()
+	player._rebuild_spell_pages()
+	GameState.save_game()
+	GameState.state_changed.emit()
+	GameState.spellbook_changed.emit()
+	hud.refresh_inventory()
+	hud.refresh_spell_settings()
+	show_message(message)
 
 func enemy_defeated(enemy_type: String, at: Vector3) -> void:
 	kills[enemy_type] = int(kills.get(enemy_type, 0)) + 1
@@ -857,6 +1380,8 @@ func spawn_healing_circle(caster: PlayerController, config: RuntimeSpellConfig, 
 	temporary_effects.add_child(circle)
 	circle.global_position = at
 	circle.configure(caster, config)
+	if NetworkManager.is_network_game() and multiplayer.is_server():
+		_register_network_area_effect(circle, "healing", config, at, 0.0)
 	return circle
 
 func cast_special_spell(caster: PlayerController, config: RuntimeSpellConfig, start: Vector3, target: Vector3, direction: Vector3, behavior_override: String = "") -> Node:
@@ -868,6 +1393,8 @@ func cast_special_spell(caster: PlayerController, config: RuntimeSpellConfig, st
 		field.global_position.y = 0.08
 		field.rotation.y = caster.rotation.y
 		field.configure(caster, config)
+		if NetworkManager.is_network_game() and multiplayer.is_server():
+			_register_network_area_effect(field, "field", config, target, caster.rotation.y)
 		return field
 	if behavior == "cone":
 		_cast_cone(config, start, direction)
@@ -900,6 +1427,9 @@ func cast_special_spell(caster: PlayerController, config: RuntimeSpellConfig, st
 	return null
 
 func play_explosion_sequence(caster: PlayerController) -> bool:
+	if not EXPLOSION_GAMEPLAY_ENABLED:
+		show_message("대폭발은 현재 사용할 수 없습니다.")
+		return false
 	if caster == null or not is_instance_valid(caster) or not GameState.consume_explosion_use():
 		show_message("이번 원정에서는 이미 대폭발을 사용했습니다.")
 		return false
@@ -1211,6 +1741,10 @@ func extract_network_player(peer_id: int, extraction_name: String) -> bool:
 	return true
 
 
+func network_raid_result(extraction_name: String) -> Dictionary:
+	return {"kills":kills.duplicate(true), "extraction":extraction_name}
+
+
 func _can_extract_network_player(network_player: PlayerController, extraction_name: String) -> bool:
 	for zone: Node in extraction_zones.get_children():
 		if not zone is ExtractionZone:
@@ -1227,7 +1761,7 @@ func on_player_died() -> void:
 			if candidate.dead:
 				var peer_id := candidate.network_peer_id
 				extract_network_player(peer_id, "abandoned")
-				NetworkManager.server_complete_raid_extraction(peer_id, false)
+				NetworkManager.server_complete_raid_extraction(peer_id, false, network_raid_result("abandoned"))
 				return
 	if raid_complete:
 		return

@@ -48,6 +48,10 @@ func interact(player: PlayerController) -> void:
 	await get_tree().create_timer(channel_duration).timeout
 	if not is_inside_tree():
 		return
+	var network_raid := _raid_scene()
+	if NetworkManager.is_connected_to_server() and network_raid != null and network_raid.has_method("request_network_region_travel"):
+		network_raid.request_network_region_travel(destination_region_id)
+		return
 	var main: Node = get_tree().current_scene
 	if main.has_method("travel_to_region"):
 		main.travel_to_region(destination_region_id)
