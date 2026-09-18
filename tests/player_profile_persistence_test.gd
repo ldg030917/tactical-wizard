@@ -61,15 +61,45 @@ func _test_profile_persistence_and_session_mapping() -> void:
 	var invalid: Dictionary = restarted_service.register_peer(505, "../unsafe")
 	_expect(not bool(invalid.get("ok", false)), "unsafe user_id was accepted")
 
-	var tampered_selection := {
-		"loadout": {"spellbook":"not_owned_item"},
-		"spell_pages": restored.spell_pages.duplicate(true),
-		"selected_character_id": restored.selected_character_id
-	}
-	var tampered_result: Dictionary = restarted_service.apply_loadout_selection(202, tampered_selection)
+	var tampered_result: Dictionary = restarted_service.apply_lobby_action(202, "equip_slot", {"item_id":"not_owned_item", "slot":"spellbook"})
 	_expect(not bool(tampered_result.get("ok", false)), "server accepted a client-selected unowned item")
+	var sold_before := int(restored.stash.get("health_potion", 0))
+	var currency_before := restored.currency
+	var sale_result: Dictionary = restarted_service.apply_lobby_action(202, "sell", {"item_id":"health_potion"})
+	_expect(bool(sale_result.get("ok", false)), "server-authoritative lobby sale failed")
+	_expect(int(restored.stash.get("health_potion", 0)) == sold_before - 1, "sale did not remove the sold item")
+	_expect(restored.currency == currency_before + int(ItemDB.get_item("health_potion").get("value", 0)), "sale did not credit authoritative currency")
+	var dust_before := int(restored.stash.get("arcane_dust", 0))
+	var buy_currency_before := restored.currency
+	var buy_result: Dictionary = restarted_service.apply_lobby_action(202, "buy", {"item_id":"arcane_dust", "price":1})
+	_expect(bool(buy_result.get("ok", false)), "server-authoritative vendor purchase failed")
+	_expect(int(restored.stash.get("arcane_dust", 0)) == dust_before + 1, "vendor purchase did not add the item")
+	_expect(restored.currency == buy_currency_before - int(restarted_service.VENDOR_PRICES["arcane_dust"]), "server trusted a client-provided vendor price")
+	var equip_result: Dictionary = restarted_service.apply_lobby_action(202, "equip_slot", {"item_id":"novice_hood", "slot":"head"})
+	_expect(bool(equip_result.get("ok", false)) and restored.loadout.get("head", "") == "novice_hood", "server-authoritative equipment change failed")
+	_expect(bool(restarted_service.apply_lobby_action(202, "unequip", {"slot":"head"}).get("ok", false)), "server-authoritative unequip failed")
+	var accepted_quest_id := ""
+	for quest: Dictionary in restored.quests:
+		if str(quest.get("state", "")) == "available":
+			accepted_quest_id = str(quest.get("id", ""))
+			break
+	_expect(not accepted_quest_id.is_empty() and bool(restarted_service.apply_lobby_action(202, "accept_quest", {"quest_id":accepted_quest_id}).get("ok", false)), "server-authoritative quest acceptance failed")
 	restarted_service.remove_peer(202)
 	restarted_service.remove_peer(303)
+	var sale_reload_service: Variant = _new_service()
+	_expect(bool(sale_reload_service.register_peer(606, USER_A).get("ok", false)), "sale profile reload failed")
+	var sale_reloaded := sale_reload_service.profile_for_peer(606) as PlayerProfile
+	_expect(sale_reloaded != null and sale_reloaded.currency == restored.currency, "lobby sale currency did not persist")
+	_expect(sale_reloaded != null and int(sale_reloaded.stash.get("health_potion", 0)) == sold_before - 1, "lobby sale inventory did not persist")
+	_expect(sale_reloaded != null and sale_reloaded.loadout.get("head", "") == "", "lobby equipment changes did not persist")
+	if sale_reloaded != null and not accepted_quest_id.is_empty():
+		var persisted_quest_state := ""
+		for quest: Dictionary in sale_reloaded.quests:
+			if str(quest.get("id", "")) == accepted_quest_id:
+				persisted_quest_state = str(quest.get("state", ""))
+				break
+		_expect(persisted_quest_state == "active", "lobby quest acceptance did not persist")
+	sale_reload_service.remove_peer(606)
 
 
 func _new_service() -> Variant:

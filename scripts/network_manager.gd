@@ -17,6 +17,7 @@ signal raid_completed(success: bool, result: Dictionary)
 signal raid_region_world_requested(session_id: String, region_id: String)
 signal load_raid_region_requested(session_id: String, region_id: String)
 signal raid_region_clients_ready(session_id: String, members: Array[int])
+signal lobby_profile_action_completed(action: String, success: bool, reason: String)
 
 const DEFAULT_PORT := 7000
 const DEFAULT_SERVER_ADDRESS := "158.180.84.54"
@@ -121,7 +122,6 @@ func is_network_game() -> bool:
 
 func request_matchmaking() -> void:
 	if is_connected_to_server():
-		submit_local_loadout()
 		_request_matchmaking.rpc_id(1)
 
 
@@ -132,25 +132,12 @@ func cancel_matchmaking() -> void:
 
 func request_test_raid() -> void:
 	if is_connected_to_server():
-		submit_local_loadout()
 		_request_test_raid.rpc_id(1)
 
 
-func submit_local_loadout() -> void:
-	if not is_connected_to_server():
-		return
-	var loadout := GameState.loadout.duplicate(true)
-	if str(loadout.get("spellbook", "")).is_empty():
-		loadout["spellbook"] = "apprentice_grimoire"
-	if str(loadout.get("focus", "")).is_empty():
-		loadout["focus"] = "apprentice_wand"
-	if str(loadout.get("dagger", "")).is_empty():
-		loadout["dagger"] = "neutral_dagger"
-	_submit_loadout.rpc_id(1, {
-		"loadout": loadout,
-		"spell_pages": GameState.spell_pages.duplicate(true),
-		"selected_character_id": GameState.selected_character_id
-	})
+func request_lobby_profile_action(action: String, payload: Dictionary = {}) -> void:
+	if is_connected_to_server():
+		_request_lobby_profile_action.rpc_id(1, action, payload)
 
 
 func get_peer_loadout(peer_id: int) -> Dictionary:
@@ -168,10 +155,10 @@ func server_sync_client_profile(peer_id: int, raid_inventory: Dictionary) -> voi
 	_sync_client_profile.rpc_id(peer_id, PlayerProfileService.profile_snapshot_for_peer(peer_id), raid_inventory)
 
 
-func server_apply_raid_result(peer_id: int, success: bool, authoritative_loadout: Dictionary, authoritative_pages: Array, raid_inventory: Dictionary, secure_inventory: Dictionary) -> bool:
+func server_apply_raid_result(peer_id: int, success: bool, authoritative_loadout: Dictionary, authoritative_pages: Array, raid_inventory: Dictionary, secure_inventory: Dictionary, raid_kills: Dictionary) -> bool:
 	if not multiplayer.is_server() or not PlayerProfileService.has_session(peer_id):
 		return false
-	return PlayerProfileService.apply_raid_result(peer_id, success, authoritative_loadout, authoritative_pages, raid_inventory, secure_inventory)
+	return PlayerProfileService.apply_raid_result(peer_id, success, authoritative_loadout, authoritative_pages, raid_inventory, secure_inventory, raid_kills)
 
 
 func is_region_transitioning(session_id: String) -> bool:
@@ -409,7 +396,6 @@ func _identity_accepted(profile_snapshot: Dictionary) -> void:
 	GameState.apply_server_profile_snapshot(profile_snapshot)
 	connection_status_changed.emit("Connected to server.")
 	session_state_changed.emit("ONLINE")
-	submit_local_loadout()
 	client_connected.emit()
 
 
@@ -433,73 +419,30 @@ func _request_matchmaking() -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _submit_loadout(snapshot: Dictionary) -> void:
+func _request_lobby_profile_action(action: String, payload: Dictionary) -> void:
 	if not multiplayer.is_server():
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
-	if not connected_peer_ids.has(peer_id) or not PlayerProfileService.has_session(peer_id):
+	if not connected_peer_ids.has(peer_id) or not PlayerProfileService.has_session(peer_id) or int(peer_raid_states.get(peer_id, -1)) != PeerRaidState.MULTIPLAYER_LOBBY:
+		_lobby_profile_action_result.rpc_id(peer_id, action, false, "not_in_lobby", {})
 		return
-	var normalized := _normalize_loadout_snapshot(snapshot)
-	if normalized.is_empty():
-		print("[LOADOUT] rejected peer=%d" % peer_id)
-		return
-	var result: Dictionary = PlayerProfileService.apply_loadout_selection(peer_id, normalized)
-	if not bool(result.get("ok", false)):
-		print("[LOADOUT] rejected peer=%d reason=%s item=%s" % [peer_id, str(result.get("reason", "unknown")), str(result.get("item_id", ""))])
-		_sync_client_profile.rpc_id(peer_id, PlayerProfileService.profile_snapshot_for_peer(peer_id), {})
-		return
-	var previous_regions: Array = peer_loadouts.get(peer_id, {}).get("visited_regions", ["neutral_frontier"]).duplicate()
-	peer_loadouts[peer_id] = result.get("gameplay_profile", {}).duplicate(true)
-	peer_loadouts[peer_id]["visited_regions"] = previous_regions
-	_sync_client_profile.rpc_id(peer_id, result.get("snapshot", {}), {})
-	print("[LOADOUT] accepted peer=%d pages=%s source=server_profile" % [peer_id, str(normalized.spell_pages)])
+	var result: Dictionary = PlayerProfileService.apply_lobby_action(peer_id, action, payload)
+	var success := bool(result.get("ok", false))
+	var snapshot: Dictionary = result.get("snapshot", PlayerProfileService.profile_snapshot_for_peer(peer_id))
+	if success:
+		var previous_regions: Array = peer_loadouts.get(peer_id, {}).get("visited_regions", ["neutral_frontier"]).duplicate()
+		peer_loadouts[peer_id] = result.get("gameplay_profile", {}).duplicate(true)
+		peer_loadouts[peer_id]["visited_regions"] = previous_regions
+	_lobby_profile_action_result.rpc_id(peer_id, action, success, str(result.get("reason", "")), snapshot)
 
 
-func _normalize_loadout_snapshot(snapshot: Dictionary) -> Dictionary:
-	var raw_loadout: Variant = snapshot.get("loadout", {})
-	var raw_pages: Variant = snapshot.get("spell_pages", [])
-	if not raw_loadout is Dictionary or not raw_pages is Array or raw_pages.size() != 3:
-		return {}
-	var accepted_categories := {
-		"spellbook":["spellbook"], "focus":["focus"], "dagger":["dagger", "melee"],
-		"head":["armor_head"], "chest":["armor_chest", "armor"],
-		"accessory_1":["accessory"], "accessory_2":["accessory"], "backpack":["backpack"],
-		"consumable_1":["medical", "mana_consumable"], "consumable_2":["medical", "mana_consumable"]
-	}
-	var loadout: Dictionary = {}
-	for slot: String in accepted_categories:
-		var selected_item := str((raw_loadout as Dictionary).get(slot, ""))
-		if not selected_item.is_empty():
-			var item_info := ItemDB.get_item(selected_item)
-			if item_info.is_empty() or str(item_info.get("category", "")) not in accepted_categories[slot]:
-				return {}
-		loadout[slot] = selected_item
-	var pages: Array = []
-	var book := ItemDB.spellbook(str(loadout.get("spellbook", "")))
-	for raw_page: Variant in raw_pages:
-		if not raw_page is Dictionary:
-			return {}
-		var page: Dictionary = raw_page
-		var spell_id := str(page.get("spell_item", ""))
-		var spell := ItemDB.spell(spell_id)
-		if spell == null:
-			return {}
-		var modifiers: Array = []
-		for raw_modifier: Variant in page.get("modifiers", []):
-			var modifier_id := str(raw_modifier)
-			var modifier := ItemDB.modifier(modifier_id)
-			if modifier == null or not modifier.is_compatible(spell):
-				return {}
-			modifiers.append(modifier_id)
-		if book == null or modifiers.size() > book.maximum_modifiers_per_page:
-			return {}
-		pages.append({"spell_item": spell_id, "modifiers": modifiers})
-	var character_id := str(snapshot.get("selected_character_id", "mana_specialist"))
-	if not ContentRegistry.characters().has(character_id):
-		return {}
-	return {
-		"loadout": loadout, "spell_pages": pages, "selected_character_id": character_id
-	}
+@rpc("authority", "call_remote", "reliable")
+func _lobby_profile_action_result(action: String, success: bool, reason: String, profile_snapshot: Dictionary) -> void:
+	if not is_connected_to_server():
+		return
+	if not profile_snapshot.is_empty():
+		GameState.apply_server_profile_snapshot(profile_snapshot)
+	lobby_profile_action_completed.emit(action, success, reason)
 
 
 @rpc("any_peer", "call_remote", "reliable")

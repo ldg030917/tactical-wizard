@@ -25,7 +25,9 @@ Client request
 - `PlayerProfileService`: server-only `peer_id -> PlayerSession -> user_id ->
   PlayerProfile` lookup and mutation boundary. A connected peer cannot enter
   the lobby until identity registration and profile loading succeed. Duplicate
-  active `user_id` registrations are rejected.
+  active `user_id` registrations are rejected. Lobby equipment, spell-page,
+  vendor, crafting, upgrade, skill, character, and quest actions are validated
+  and persisted here; clients receive the resulting detached snapshot.
 - `PlayerProfileStorage`: the current JSON repository implementation under
   `user://player_profiles/<user_id>.json`. Gameplay code does not access files,
   so a database-backed repository can replace it without changing raid code.
@@ -68,6 +70,11 @@ player nodes, matchmaking membership and RaidSession membership remain tied to
 the active ENet connection. Only persistent account data (stash, currency,
 loadout, runes and progression) is keyed by `user_id`. `peer_loadouts` is a
 detached runtime raid-spawn cache, not persistent storage.
+
+Clients never upload currency, stash, skills, quests, or a complete loadout.
+Lobby UI sends a narrow action plus identifiers (for example `sell` and an
+item ID). Price, ownership, capacity, recipe costs, compatibility and rewards
+are resolved from server resources before the profile is changed and saved.
 
 ## Leave paths
 

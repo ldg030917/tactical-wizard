@@ -1809,7 +1809,8 @@ func extract_network_player(peer_id: int, extraction_name: String) -> bool:
 		network_player.authoritative_loadout,
 		network_player.authoritative_spell_pages,
 		raid_inventory,
-		secure_inventory
+		secure_inventory,
+		kills
 	)
 	if not profile_saved:
 		push_error("[PROFILE] raid result save failed peer=%d" % peer_id)

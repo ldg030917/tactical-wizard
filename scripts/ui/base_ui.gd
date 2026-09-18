@@ -33,6 +33,7 @@ func _ready() -> void:
 	$Root/ContentArea/Panels/SpellbookUI/Layout/Body/ConfigurationPanel/Configuration/PageSelector/Page2Button.pressed.connect(_select_workshop_page.bind(1))
 	$Root/ContentArea/Panels/SpellbookUI/Layout/Body/ConfigurationPanel/Configuration/PageSelector/Page3Button.pressed.connect(_select_workshop_page.bind(2))
 	GameState.state_changed.connect(refresh)
+	NetworkManager.lobby_profile_action_completed.connect(_on_lobby_profile_action_completed)
 	close_station()
 
 func _process(_delta: float) -> void:
@@ -575,54 +576,93 @@ func _show_vendor() -> void:
 		elemental_button.pressed.connect(_buy_named_package.bind(package_id))
 		rows.add_child(elemental_button)
 	rows.add_child(HSeparator.new())
-	var goods: Array[Dictionary] = [
-		{"id":"health_potion", "price":72}, {"id":"mana_potion", "price":80},
-		{"id":"apprentice_grimoire", "price":190}, {"id":"apprentice_wand", "price":150},
-		{"id":"novice_hood", "price":175}, {"id":"small_pack", "price":170}, {"id":"arcane_dust", "price":28}
-	]
-	for good: Dictionary in goods:
+	for item_id: String in PlayerProfileService.VENDOR_PRICES:
+		var price := int(PlayerProfileService.VENDOR_PRICES[item_id])
 		var button := Button.new()
-		button.text = "%s 구매 — %d 크라운" % [ItemDB.display_name(str(good.id)), int(good.price)]
-		button.pressed.connect(_buy.bind(str(good.id), int(good.price)))
+		button.text = "%s 구매 — %d 크라운" % [ItemDB.display_name(item_id), price]
+		button.pressed.connect(_buy.bind(item_id, price))
 		rows.add_child(button)
 
 func _select_workshop_page(index: int) -> void:
 	workshop_page = index
 	_show_spellbook()
 func _install_spell(item_id: String) -> void:
+	if _request_profile_action("install_spell", {"page_index":workshop_page, "item_id":item_id}):
+		return
 	_feedback(GameState.install_page_spell(workshop_page, item_id), "기본 주문을 장착하고 페이지를 저장했습니다.", "주문 페이지를 사용할 수 없습니다.")
 func _install_modifier(item_id: String) -> void:
+	if _request_profile_action("install_modifier", {"page_index":workshop_page, "item_id":item_id}):
+		return
 	var result: Dictionary = GameState.install_page_modifier(workshop_page, item_id)
 	_feedback(bool(result.success), str(result.message), str(result.message))
 func _remove_modifier(index: int) -> void:
+	if _request_profile_action("remove_modifier", {"page_index":workshop_page, "modifier_index":index}):
+		return
 	_feedback(GameState.remove_page_modifier(workshop_page, index), "룬을 보관함으로 돌려보냈습니다.", "룬을 제거할 수 없습니다.")
 func _equip(item_id: String) -> void:
+	if _request_profile_action("equip_auto", {"item_id":item_id}):
+		return
 	_feedback(GameState.equip_from_stash(item_id), "%s 장착 완료." % ItemDB.display_name(item_id), "호환되는 장비 슬롯이 없습니다.")
 func _unequip(slot: String) -> void:
+	if _request_profile_action("unequip", {"slot":slot}):
+		return
 	_feedback(GameState.unequip(slot), "장비를 보관함으로 옮겼습니다.", "이미 빈 슬롯입니다.")
 func _sell(item_id: String) -> void:
+	if _request_profile_action("sell", {"item_id":item_id}):
+		return
 	_feedback(GameState.sell_item(item_id), "%s 판매 완료." % ItemDB.display_name(item_id), "아이템을 사용할 수 없습니다.")
 func _craft(recipe_id: String) -> void:
+	if _request_profile_action("craft", {"recipe_id":recipe_id}):
+		return
 	_feedback(GameState.craft(recipe_id), "비전 제작 완료.", "재료, 크라운 또는 작업대 단계가 부족합니다.")
 func _upgrade(upgrade_id: String) -> void:
+	if _request_profile_action("upgrade", {"upgrade_id":upgrade_id}):
+		return
 	_feedback(GameState.purchase_base_upgrade(upgrade_id), "기지 시설을 강화했습니다.", "크라운이나 재료가 부족하거나 이미 최대 단계입니다.")
 func _skill(skill_id: String) -> void:
+	if _request_profile_action("purchase_skill", {"skill_id":skill_id}):
+		return
 	_feedback(GameState.purchase_skill(skill_id), "훈련을 적용했습니다.", "통찰이 부족하거나 이미 최대 등급입니다.")
 func _accept_quest(quest_id: String) -> void:
+	if _request_profile_action("accept_quest", {"quest_id":quest_id}):
+		return
 	GameState.accept_quest(quest_id)
 	feedback_label.text = "원정을 수락했습니다."
 func _claim_quest(quest_id: String) -> void:
+	if _request_profile_action("claim_quest", {"quest_id":quest_id}):
+		return
 	_feedback(GameState.claim_quest(quest_id), "원정 보상을 받았습니다.", "목표를 완료하지 않았습니다.")
 func _buy(item_id: String, price: int) -> void:
+	if _request_profile_action("buy", {"item_id":item_id}):
+		return
 	_feedback(GameState.buy_item(item_id, price), "%s 구매 완료." % ItemDB.display_name(item_id), "크라운 또는 보관함 공간이 부족합니다.")
 func _buy_package() -> void:
+	if _request_profile_action("buy_package", {"package_id":"neutral_recovery"}):
+		return
 	_feedback(GameState.purchase_starter_package(), "복구 세트를 보관함에 넣었습니다.", "크라운이 부족합니다.")
 
 func _buy_named_package(package_id: String) -> void:
+	if _request_profile_action("buy_package", {"package_id":package_id}):
+		return
 	_feedback(GameState.purchase_starter_package(package_id), "복구 세트를 보관함에 넣었습니다.", "크라운이 부족합니다.")
 
 func _select_character(character_id: String) -> void:
+	if _request_profile_action("select_character", {"character_id":character_id}):
+		return
 	_feedback(GameState.select_character(character_id), "특화를 선택했습니다.", "해당 캐릭터 특화를 사용할 수 없습니다.")
+
+
+func _request_profile_action(action: String, payload: Dictionary) -> bool:
+	if not NetworkManager.is_connected_to_server():
+		return false
+	NetworkManager.request_lobby_profile_action(action, payload)
+	feedback_label.text = "서버에 변경사항을 저장하는 중입니다..."
+	return true
+
+
+func _on_lobby_profile_action_completed(_action: String, success: bool, reason: String) -> void:
+	feedback_label.text = "변경사항을 서버에 저장했습니다." if success else "변경할 수 없습니다: %s" % reason
+	refresh()
 
 func _feedback(success: bool, good: String, bad: String) -> void:
 	feedback_label.text = good if success else bad
@@ -660,6 +700,20 @@ func _accepted_categories_for_loadout(slot: String) -> Array[String]:
 
 func _on_item_slot_drop(payload: Dictionary, target_context: String, target_slot: String) -> void:
 	var item_id: String = str(payload.get("item_id", ""))
+	if NetworkManager.is_connected_to_server():
+		var source_context := str(payload.get("source_context", ""))
+		if target_context == "loadout" and source_context == "stash":
+			_request_profile_action("equip_slot", {"item_id":item_id, "slot":target_slot})
+		elif target_context == "spell_page" and source_context == "stash":
+			_request_profile_action("install_spell", {"page_index":int(target_slot), "item_id":item_id})
+		elif target_context == "spell_attachment" and source_context == "stash":
+			_request_profile_action("install_modifier", {"page_index":int(target_slot.get_slice(":", 0)), "item_id":item_id})
+		elif target_context == "attachment_storage" and source_context == "spell_attachment":
+			var source_slot := str(payload.get("source_slot", ""))
+			_request_profile_action("remove_modifier", {"page_index":int(source_slot.get_slice(":", 0)), "modifier_index":int(source_slot.get_slice(":", 1))})
+		else:
+			feedback_label.text = "이 슬롯에는 해당 아이템을 넣을 수 없습니다."
+		return
 	var success: bool = false
 	if target_context == "loadout" and str(payload.get("source_context", "")) == "stash":
 		success = GameState.equip_from_stash_to_slot(item_id, target_slot)
