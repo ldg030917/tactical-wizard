@@ -273,7 +273,7 @@ func spawn_spell_impact(at: Vector3, color: Color, radius: float, primary_elemen
 	tween.parallel().tween_property(effect, "transparency", 1.0, 0.3)
 	tween.tween_callback(effect.queue_free)
 
-func schedule_spell_echo(config: RuntimeSpellConfig, at: Vector3) -> void:
+func schedule_spell_echo(_caster: Node3D, config: RuntimeSpellConfig, at: Vector3) -> void:
 	get_tree().create_timer(0.75).timeout.connect(func() -> void:
 		spawn_spell_impact(at, config.base_spell.debug_color, maxf(0.8, config.area_radius), config.base_spell.primary_element, 17.0)
 	)

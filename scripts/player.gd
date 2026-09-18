@@ -24,6 +24,7 @@ var _network_focus := false
 var _network_rotation_y := 0.0
 var _network_send_elapsed := 0.0
 var _network_input_blocked := false
+var _server_input_blocked := false
 var _snapshot_buffer: Array[Dictionary] = []
 
 @export_category("Movement")
@@ -47,8 +48,6 @@ var _snapshot_buffer: Array[Dictionary] = []
 @export_range(5.0, 30.0, 0.5, "suffix:m") var camera_height: float = 15.0
 @export_range(2.0, 25.0, 0.5, "suffix:m") var camera_distance: float = 11.0
 @export_range(0.0, 1.0, 0.05) var aim_look_ahead: float = 0.28
-@export_range(0.1, 3.0, 0.05) var free_aim_cursor_sensitivity: float = 1.0
-
 @export_category("Scene Node References")
 @export_node_path("Node3D") var visual_root_path: NodePath = ^"Visual"
 @export_node_path("Node3D") var wand_socket_path: NodePath = ^"WandSocket"
@@ -109,8 +108,6 @@ var _network_aim_yaw := 0.0
 var _network_aim_pitch := 0.0
 var _network_aim_initialized := false
 var _local_snapshot_rotation_suppressed_logged := false
-var _virtual_aim_position := Vector2.ZERO
-var _virtual_aim_initialized := false
 var _network_aim_origin := Vector3.ZERO
 var _network_aim_direction := Vector3.FORWARD
 const NETWORK_RECONCILE_MIN_DISTANCE := 0.035
@@ -238,8 +235,7 @@ func _initialize_local_network_player() -> void:
 	set_process_unhandled_input(true)
 	_network_aim_yaw = rotation.y
 	_network_aim_initialized = true
-	_initialize_virtual_aim_cursor()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func activate_local_network_camera() -> void:
@@ -332,6 +328,11 @@ func _network_physics_process(delta: float) -> void:
 			velocity = velocity.move_toward(Vector3.ZERO, delta * 8.0)
 			move_and_slide()
 			return
+		if _server_input_blocked:
+			_network_move_input = Vector2.ZERO
+			_network_sprint = false
+			_network_crouch = false
+			_network_focus = false
 		# Casting time, cancellation and completion are authoritative server state.
 		_update_casting(delta)
 		_apply_movement_input(_network_move_input, _network_sprint, _network_crouch, _network_focus, delta)
@@ -340,22 +341,12 @@ func _network_physics_process(delta: float) -> void:
 	if is_local_network_player():
 		if dead:
 			return
-		if _is_free_aim_ui_blocked():
+		var should_block_input := _is_free_aim_ui_blocked()
+		if should_block_input != _network_input_blocked:
+			set_local_network_input_blocked(should_block_input, "player_state")
+		if should_block_input:
 			velocity = Vector3.ZERO
-			# The server retains the last movement packet. Send one explicit neutral
-			# input when a local menu opens so gameplay really stops with mouse-look.
-			if not _network_input_blocked:
-				_network_input_blocked = true
-				print("[INPUT_BLOCK] peer=%d blocked=true menu_open=%s raid_ui_open=%s mouse_mode=%d" % [
-					network_peer_id, str(_main_menu_open()), str(_raid_aim_ui_open()), Input.mouse_mode
-				])
-				submit_movement_input.rpc_id(1, Vector2.ZERO, rotation.y, _network_aim_pitch, false, false, false)
 			return
-		if _network_input_blocked:
-			print("[INPUT_BLOCK] peer=%d blocked=false menu_open=%s raid_ui_open=%s mouse_mode=%d" % [
-				network_peer_id, str(_main_menu_open()), str(_raid_aim_ui_open()), Input.mouse_mode
-			])
-		_network_input_blocked = false
 		# Smooth the local cooldown UI between authoritative snapshots.
 		_tick_combat_cooldowns(delta)
 		_update_aim()
@@ -376,9 +367,6 @@ func _handle_network_input(event: InputEvent) -> void:
 	if dead or not is_local_network_player():
 		return
 	if _is_free_aim_ui_blocked():
-		return
-	if event is InputEventMouseMotion:
-		_move_virtual_aim_cursor((event as InputEventMouseMotion).relative * free_aim_cursor_sensitivity)
 		return
 	if event.is_action_pressed("spell_page_1"):
 		select_spell_page(0)
@@ -420,12 +408,45 @@ func _handle_network_input(event: InputEvent) -> void:
 func submit_movement_input(input: Vector2, rotation_y: float, aim_pitch: float, sprint_pressed: bool, crouch_pressed: bool, focus_pressed: bool) -> void:
 	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != network_peer_id:
 		return
+	if _server_input_blocked:
+		_network_move_input = Vector2.ZERO
+		_network_sprint = false
+		_network_crouch = false
+		_network_focus = false
+		return
 	_network_move_input = input.limit_length(1.0)
 	_network_rotation_y = rotation_y
 	_network_aim_pitch = clampf(aim_pitch, -0.65, 0.65)
 	_network_sprint = sprint_pressed
 	_network_crouch = crouch_pressed
 	_network_focus = focus_pressed
+
+
+func set_local_network_input_blocked(blocked: bool, source: String = "external") -> void:
+	if not is_local_network_player() or _network_input_blocked == blocked:
+		return
+	_network_input_blocked = blocked
+	if blocked:
+		velocity = Vector3.ZERO
+	_set_server_input_blocked.rpc_id(1, blocked)
+	print("[INPUT_BLOCK] peer=%d source=%s blocked=%s menu_open=%s raid_ui_open=%s mouse_mode=%d" % [
+		network_peer_id, source, str(blocked), str(_main_menu_open()), str(_raid_aim_ui_open()), Input.mouse_mode
+	])
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _set_server_input_blocked(blocked: bool) -> void:
+	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != network_peer_id:
+		return
+	_server_input_blocked = blocked
+	if blocked:
+		_network_move_input = Vector2.ZERO
+		_network_sprint = false
+		_network_crouch = false
+		_network_focus = false
+		if casting:
+			cancel_cast()
+	print("[INPUT_BLOCK_SERVER] peer=%d blocked=%s" % [network_peer_id, str(blocked)])
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -724,11 +745,9 @@ func _update_camera(delta: float) -> void:
 
 func _update_network_camera_aim_target() -> void:
 	var viewport := get_viewport()
-	_initialize_virtual_aim_cursor()
-	var viewport_size := viewport.get_visible_rect().size
-	_virtual_aim_position = _virtual_aim_position.clamp(Vector2.ZERO, viewport_size)
-	_network_aim_origin = camera.project_ray_origin(_virtual_aim_position)
-	_network_aim_direction = camera.project_ray_normal(_virtual_aim_position).normalized()
+	var mouse_position := viewport.get_mouse_position()
+	_network_aim_origin = camera.project_ray_origin(mouse_position)
+	_network_aim_direction = camera.project_ray_normal(mouse_position).normalized()
 	aim_point = _ground_plane_aim_target(_network_aim_origin, _network_aim_direction, aim_point)
 	_apply_network_aim_facing()
 	_update_preview()
@@ -742,28 +761,6 @@ func _apply_network_aim_facing() -> void:
 	# Match main's smoothing instead of snapping network players to the target yaw.
 	_network_aim_yaw = lerp_angle(_network_aim_yaw, atan2(-horizontal_aim.x, -horizontal_aim.z), 0.32)
 	rotation.y = _network_aim_yaw
-
-
-func _initialize_virtual_aim_cursor() -> void:
-	if _virtual_aim_initialized:
-		return
-	_virtual_aim_position = get_viewport().get_visible_rect().size * 0.5
-	_virtual_aim_initialized = true
-
-
-func _move_virtual_aim_cursor(relative_motion: Vector2) -> void:
-	_initialize_virtual_aim_cursor()
-	var viewport_size := get_viewport().get_visible_rect().size
-	_virtual_aim_position = (_virtual_aim_position + relative_motion).clamp(Vector2.ZERO, viewport_size)
-
-
-func get_virtual_aim_position() -> Vector2:
-	_initialize_virtual_aim_cursor()
-	return _virtual_aim_position
-
-
-func is_virtual_aim_active() -> bool:
-	return is_local_network_player() and not _is_free_aim_ui_blocked()
 
 
 func is_aim_input_blocked() -> bool:
@@ -963,7 +960,9 @@ func dagger_attack() -> bool:
 	dagger_cooldown = 1.0 / maxf(0.1, dagger.attack_speed)
 	stamina = maxf(0.0, stamina - dagger.stamina_cost)
 	var hit_any: bool = false
-	for target: Node in get_tree().get_nodes_in_group("enemies"):
+	var raid: Node = _gameplay_area()
+	var targets: Array[Node] = raid.get_player_attack_targets(self) if raid.has_method("get_player_attack_targets") else get_tree().get_nodes_in_group("enemies")
+	for target: Node in targets:
 		if not target is Node3D:
 			continue
 		var offset: Vector3 = (target as Node3D).global_position - global_position
@@ -974,11 +973,14 @@ func dagger_attack() -> bool:
 		if rad_to_deg(facing.angle_to(offset.normalized())) > dagger.attack_arc_degrees * 0.5:
 			continue
 		var arm_injury: float = maxf(float(injuries.left_arm), float(injuries.right_arm))
-		target.take_damage(dagger.damage * (1.0 - arm_injury * 0.35), global_position, 0.0, dagger.primary_element)
+		var damage := dagger.damage * (1.0 - arm_injury * 0.35)
+		if target is PlayerController:
+			(target as PlayerController).take_damage(damage, global_position, 0.0, dagger.primary_element, "dagger:peer:%d" % network_peer_id)
+		else:
+			target.take_damage(damage, global_position, 0.0, dagger.primary_element)
 		if not dagger.status_effect.is_empty() and target.has_method("apply_status"):
 			target.apply_status(dagger.status_effect, 2.0, dagger.damage * 0.08)
 		hit_any = true
-	var raid: Node = _gameplay_area()
 	if raid.has_method("spawn_spell_impact"):
 		raid.spawn_spell_impact(global_position + -global_transform.basis.z * 1.1 + Vector3(0, 0.5, 0), dagger.debug_color, dagger.attack_range * 0.65)
 	return hit_any

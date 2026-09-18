@@ -99,7 +99,7 @@ func _process(_delta: float) -> void:
 	interaction_prompt.tooltip_text = player.nearby_interaction
 	reticle.text = "◎" if config != null and config.valid and config.behavior_type != "projectile" else "+"
 	reticle.visible = not player.is_aim_input_blocked()
-	var reticle_position := player.get_virtual_aim_position() if player.is_virtual_aim_active() else get_viewport().get_mouse_position()
+	var reticle_position := get_viewport().get_mouse_position()
 	reticle.position = reticle_position - Vector2(13, 19)
 
 func _page_name(index: int) -> String:
@@ -177,7 +177,7 @@ func _refresh_aim_cursor_mode() -> void:
 	if root != null and root.has_method("refresh_local_input_state"):
 		root.refresh_local_input_state("raid_hud")
 		return
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if is_aim_ui_open() else Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func refresh_inventory() -> void:
 	if inventory_rows == null:

@@ -1097,6 +1097,11 @@ func toggle_inventory() -> void:
 func is_aim_ui_open() -> bool:
 	return hud != null and hud.is_aim_ui_open()
 
+
+func set_local_gameplay_input_blocked(blocked: bool, source: String = "raid") -> void:
+	if player != null and is_instance_valid(player):
+		player.set_local_network_input_blocked(blocked, source)
+
 func show_loot(container: LootContainer) -> void:
 	hud.show_loot(container)
 
@@ -1340,10 +1345,63 @@ func enemy_defeated(enemy_type: String, at: Vector3) -> void:
 	if NetworkManager.is_network_game() and multiplayer.is_server():
 		_register_network_loot_container(drop)
 
+
+func _drop_network_player_loot(peer_id: int, network_player: PlayerController) -> void:
+	if not multiplayer.is_server() or not is_instance_valid(network_player):
+		return
+	var dropped_items := _network_inventory(peer_id)
+	for slot: String in ["spellbook", "focus", "dagger", "head", "chest", "accessory_1", "accessory_2", "backpack", "consumable_1", "consumable_2"]:
+		_dictionary_add_item(dropped_items, str(network_player.authoritative_loadout.get(slot, "")))
+	for page_value: Variant in network_player.authoritative_spell_pages:
+		if not page_value is Dictionary:
+			continue
+		var page := page_value as Dictionary
+		_dictionary_add_item(dropped_items, str(page.get("spell_item", "")))
+		for modifier_id: Variant in page.get("modifiers", []):
+			_dictionary_add_item(dropped_items, str(modifier_id))
+	if dropped_items.is_empty():
+		return
+	var drop := enemy_drop_container_scene.instantiate() as LootContainer
+	if drop == null:
+		push_error("[PLAYER_LOOT] failed to instantiate peer=%d" % peer_id)
+		return
+	drop.container_id = "player_remains"
+	drop.container_name = "플레이어 %d의 유류품" % peer_id
+	drop.search_duration = 0.25
+	drop.set_preset_loot(dropped_items)
+	runtime_actors.add_child(drop)
+	drop.global_position = network_player.global_position
+	_register_network_loot_container(drop)
+	print("[PLAYER_LOOT] peer=%d position=%s items=%s" % [peer_id, str(drop.global_position), str(dropped_items)])
+
 func notify_spell_cast(position: Vector3, radius: float) -> void:
 	for node: Node in get_tree().get_nodes_in_group("enemies"):
 		if is_ancestor_of(node) and node.has_method("hear_spell"):
 			node.hear_spell(position, radius)
+
+
+func get_player_attack_targets(caster: Node3D) -> Array[Node]:
+	var targets: Array[Node] = []
+	for node: Node in get_tree().get_nodes_in_group("enemies"):
+		if node is EnemyController and is_ancestor_of(node) and not (node as EnemyController).dead:
+			targets.append(node)
+	# PvP damage remains server-authoritative and is limited to players owned by
+	# this RaidScene/session. Clients only render replicated effects.
+	if NetworkManager.is_network_game() and multiplayer.is_server():
+		for candidate: PlayerController in network_players.values():
+			if is_instance_valid(candidate) and candidate != caster and not candidate.dead:
+				targets.append(candidate)
+	return targets
+
+
+func get_enemy_attack_targets() -> Array[Node]:
+	var targets: Array[Node] = []
+	for candidate: PlayerController in network_players.values():
+		if is_instance_valid(candidate) and not candidate.dead:
+			targets.append(candidate)
+	if not NetworkManager.is_network_game() and player != null and is_instance_valid(player) and not player.dead:
+		targets.append(player)
+	return targets
 
 func spawn_player_spell(caster: PlayerController, config: RuntimeSpellConfig, start: Vector3, direction: Vector3, target: Vector3 = Vector3.ZERO) -> SpellProjectile:
 	if config == null or config.base_spell == null or config.base_spell.projectile_scene == null:
@@ -1402,11 +1460,11 @@ func cast_special_spell(caster: PlayerController, config: RuntimeSpellConfig, st
 			_register_network_area_effect(field, "field", config, target, caster.rotation.y)
 		return field
 	if behavior == "cone":
-		_cast_cone(config, start, direction)
+		_cast_cone(caster, config, start, direction)
 	elif behavior == "chain":
-		_cast_chain(config, start, target)
+		_cast_chain(caster, config, start, target)
 	elif behavior == "beam":
-		_cast_beam(config, start, target)
+		_cast_beam(caster, config, start, target)
 	elif behavior == "teleport":
 		caster.global_position = target + Vector3(0, 0.05, 0)
 		spawn_spell_impact(target, config.base_spell.debug_color, 1.2, config.base_spell.primary_element, 4.0)
@@ -1421,12 +1479,12 @@ func cast_special_spell(caster: PlayerController, config: RuntimeSpellConfig, st
 		caster.add_ward(config.damage_or_healing)
 		spawn_spell_impact(caster.global_position, config.base_spell.debug_color, 2.0, "neutral", 11.0)
 	elif behavior == "knockback":
-		for node: Node in get_tree().get_nodes_in_group("enemies"):
-			if node is EnemyController and is_ancestor_of(node):
-				var offset: Vector3 = (node as Node3D).global_position - caster.global_position
-				offset.y = 0.0
-				if offset.length() <= config.area_radius:
-					node.take_damage(config.damage_or_healing, caster.global_position, 0.0, "neutral")
+		for node: Node in get_player_attack_targets(caster):
+			var offset: Vector3 = (node as Node3D).global_position - caster.global_position
+			offset.y = 0.0
+			if offset.length() <= config.area_radius:
+				_damage_player_attack_target(node, config.damage_or_healing, caster.global_position, "neutral", caster)
+				if node.has_method("apply_knockback"):
 					node.apply_knockback(offset.normalized() * maxf(5.0, config.effect_power))
 		spawn_spell_impact(caster.global_position, config.base_spell.debug_color, config.area_radius, "neutral", 13.0)
 	return null
@@ -1532,43 +1590,39 @@ func _spawn_fullscreen_explosion() -> void:
 	tween.tween_method(func(progress: float) -> void: material.set_shader_parameter("blast_progress", progress), 0.0, 1.0, 1.65)
 	tween.tween_callback(layer.queue_free)
 
-func _cast_cone(config: RuntimeSpellConfig, start: Vector3, direction: Vector3) -> void:
+func _cast_cone(caster: PlayerController, config: RuntimeSpellConfig, start: Vector3, direction: Vector3) -> void:
 	for step: int in range(1, 7):
 		spawn_spell_impact(start + direction * (float(step) * config.range_meters / 6.0), config.base_spell.debug_color, 0.35 + step * 0.13, config.base_spell.primary_element, float(step))
-	for node: Node in get_tree().get_nodes_in_group("enemies"):
-		if not node is EnemyController or not is_ancestor_of(node):
-			continue
+	for node: Node in get_player_attack_targets(caster):
 		var offset: Vector3 = (node as Node3D).global_position - start
 		offset.y = 0.0
 		if offset.length() <= config.range_meters and direction.angle_to(offset.normalized()) <= deg_to_rad(34.0):
-			node.take_damage(config.damage_or_healing, start, 0.0, config.base_spell.primary_element)
+			_damage_player_attack_target(node, config.damage_or_healing, start, config.base_spell.primary_element, caster)
 			if not config.status_effect.is_empty():
 				node.apply_status(config.status_effect, maxf(1.0, config.effect_duration), maxf(0.35, config.effect_power))
 
-func _cast_chain(config: RuntimeSpellConfig, start: Vector3, target: Vector3) -> void:
-	var candidates: Array[EnemyController] = []
-	for node: Node in get_tree().get_nodes_in_group("enemies"):
-		if node is EnemyController and is_ancestor_of(node) and (node as Node3D).global_position.distance_to(target) <= config.range_meters:
-			candidates.append(node as EnemyController)
-	candidates.sort_custom(func(a: EnemyController, b: EnemyController) -> bool: return a.global_position.distance_to(target) < b.global_position.distance_to(target))
+func _cast_chain(caster: PlayerController, config: RuntimeSpellConfig, start: Vector3, target: Vector3) -> void:
+	var candidates: Array[Node3D] = []
+	for node: Node in get_player_attack_targets(caster):
+		if (node as Node3D).global_position.distance_to(target) <= config.range_meters:
+			candidates.append(node as Node3D)
+	candidates.sort_custom(func(a: Node3D, b: Node3D) -> bool: return a.global_position.distance_to(target) < b.global_position.distance_to(target))
 	var from: Vector3 = start
 	for index: int in range(mini(candidates.size(), maxi(3, config.projectile_count + 2))):
-		var enemy: EnemyController = candidates[index]
-		spawn_shot_tracer(from, enemy.global_position + Vector3.UP, VisualFactory.spell_accent_color(config.base_spell.primary_element))
-		enemy.take_damage(config.damage_or_healing * pow(0.82, index), start, 0.0, config.base_spell.primary_element)
-		from = enemy.global_position + Vector3.UP
+		var target_node := candidates[index]
+		spawn_shot_tracer(from, target_node.global_position + Vector3.UP, VisualFactory.spell_accent_color(config.base_spell.primary_element))
+		_damage_player_attack_target(target_node, config.damage_or_healing * pow(0.82, index), start, config.base_spell.primary_element, caster)
+		from = target_node.global_position + Vector3.UP
 
-func _cast_beam(config: RuntimeSpellConfig, start: Vector3, target: Vector3) -> void:
+func _cast_beam(caster: PlayerController, config: RuntimeSpellConfig, start: Vector3, target: Vector3) -> void:
 	spawn_shot_tracer(start, target, VisualFactory.spell_accent_color(config.base_spell.primary_element))
 	var segment: Vector3 = target - start
 	var segment_length_sq: float = maxf(0.01, segment.length_squared())
-	for node: Node in get_tree().get_nodes_in_group("enemies"):
-		if not node is EnemyController or not is_ancestor_of(node):
-			continue
+	for node: Node in get_player_attack_targets(caster):
 		var point: Vector3 = (node as Node3D).global_position + Vector3.UP * 0.5
 		var t: float = clampf((point - start).dot(segment) / segment_length_sq, 0.0, 1.0)
 		if point.distance_to(start + segment * t) <= maxf(0.65, config.area_radius):
-			node.take_damage(config.damage_or_healing, start, 0.0, config.base_spell.primary_element)
+			_damage_player_attack_target(node, config.damage_or_healing, start, config.base_spell.primary_element, caster)
 
 func spawn_spell_impact(at: Vector3, color: Color, radius: float, primary_element: String = "neutral", variant_seed: float = 0.0) -> void:
 	if NetworkManager.is_network_game() and multiplayer.is_server():
@@ -1667,16 +1721,24 @@ func show_network_cast_release(at: Vector3, primary_element: String, color: Colo
 	if not multiplayer.is_server():
 		spawn_cast_release(at, primary_element, color, variant_seed)
 
-func schedule_spell_echo(config: RuntimeSpellConfig, at: Vector3) -> void:
+func schedule_spell_echo(caster: PlayerController, config: RuntimeSpellConfig, at: Vector3) -> void:
 	get_tree().create_timer(0.75).timeout.connect(func() -> void:
 		spawn_spell_impact(at, config.base_spell.debug_color, maxf(0.8, config.area_radius), config.base_spell.primary_element, 17.0)
-		for target: Node in get_tree().get_nodes_in_group("enemies"):
-			if target is Node3D and is_ancestor_of(target):
-				var offset: Vector3 = (target as Node3D).global_position - at
-				offset.y = 0.0
-				if offset.length() <= maxf(0.8, config.area_radius):
-					target.take_damage(config.damage_or_healing * 0.55, at, 0.0, config.base_spell.primary_element)
+		if not is_instance_valid(caster):
+			return
+		for target: Node in get_player_attack_targets(caster):
+			var offset: Vector3 = (target as Node3D).global_position - at
+			offset.y = 0.0
+			if offset.length() <= maxf(0.8, config.area_radius):
+				_damage_player_attack_target(target, config.damage_or_healing * 0.55, at, config.base_spell.primary_element, caster)
 	)
+
+
+func _damage_player_attack_target(target: Node, amount: float, source: Vector3, element: String, caster: PlayerController) -> void:
+	if target is PlayerController:
+		(target as PlayerController).take_damage(amount, source, 0.0, element, "spell:peer:%d" % caster.network_peer_id)
+	elif target.has_method("take_damage"):
+		target.take_damage(amount, source, 0.0, element)
 
 func spawn_shot_tracer(start: Vector3, end: Vector3, color: Color) -> void:
 	if NetworkManager.is_network_game() and multiplayer.is_server():
@@ -1738,7 +1800,11 @@ func extract_network_player(peer_id: int, extraction_name: String) -> bool:
 	if extraction_name != "abandoned" and not _can_extract_network_player(network_player, extraction_name):
 		print("[RAID] rejected extraction peer=%d reason=outside_zone" % peer_id)
 		return false
+	if extraction_name == "abandoned":
+		_drop_network_player_loot(peer_id, network_player)
 	network_players.erase(peer_id)
+	network_raid_inventories.erase(peer_id)
+	network_raid_secure.erase(peer_id)
 	network_player.queue_free()
 	for target_peer: int in NetworkManager.get_session_members(raid_session_id):
 		remove_network_raid_player.rpc_id(target_peer, peer_id)

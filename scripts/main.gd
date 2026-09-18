@@ -349,9 +349,15 @@ func refresh_local_input_state(source: String = "external") -> void:
 		# Preserve main's visible, absolute mouse aiming in solo play.
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
-	var raid_ui_open := active_area is RaidScene and (active_area as RaidScene).is_aim_ui_open()
+	var raid := active_area as RaidScene if active_area is RaidScene else null
+	var raid_ui_open := raid != null and raid.is_aim_ui_open()
 	var gameplay_blocked := local_menu_open or raid_ui_open
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if gameplay_blocked else Input.MOUSE_MODE_CAPTURED
+	# Multiplayer uses the same absolute, visible cursor aiming as main. Gameplay
+	# blocking is controlled independently so opening and closing UI cannot leave
+	# captured-mouse state out of sync with Player input.
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if raid != null:
+		raid.set_local_gameplay_input_blocked(gameplay_blocked, source)
 	print("[INPUT_STATE] peer=%d source=%s menu_open=%s pause_visible=%s raid_ui_open=%s gameplay_blocked=%s mouse_mode=%d" % [
 		multiplayer.get_unique_id(), source, str(local_menu_open), str(pause_menu.visible),
 		str(raid_ui_open), str(gameplay_blocked), Input.mouse_mode

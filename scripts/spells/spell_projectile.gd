@@ -56,7 +56,9 @@ func configure(owner_node: Node3D, spell_config: RuntimeSpellConfig, travel_dire
 	source_team = team
 	speed = config.projectile_speed if config != null else default_speed
 	collision_layer = 8
-	collision_mask = 1 | (4 if source_team == "player" else 2)
+	# Server-side player projectiles collide with enemies and other players. The
+	# caster is still excluded explicitly, and client replicas never monitor.
+	collision_mask = 1 | (2 | 4 if source_team == "player" else 2)
 	start_y = global_position.y
 	start_position = global_position
 	destination = target_position
@@ -121,7 +123,7 @@ func _quadratic_bezier(a: Vector3, control: Vector3, b: Vector3, t: float) -> Ve
 func _on_body_entered(body: Node3D) -> void:
 	if network_visual_replica or resolved or body == caster:
 		return
-	if source_team == "player" and body.is_in_group("enemies"):
+	if source_team == "player" and _is_player_attack_target(body):
 		if hit_target_ids.has(body.get_instance_id()):
 			return
 		if pierce_remaining > 0:
@@ -151,7 +153,7 @@ func _resolve_impact(at: Vector3, direct_target: Node = null) -> void:
 		projectile_resolved.emit(network_magic_id, "visual_complete")
 		queue_free()
 		return
-	var targets: Array[Node] = get_tree().get_nodes_in_group("enemies") if source_team == "player" else get_tree().get_nodes_in_group("player")
+	var targets := _attack_targets()
 	for target: Node in targets:
 		if not target is Node3D or not target.has_method("take_damage"):
 			continue
@@ -169,7 +171,7 @@ func _resolve_impact(at: Vector3, direct_target: Node = null) -> void:
 	if raid != null and raid.has_method("spawn_spell_impact"):
 		raid.spawn_spell_impact(at, config.base_spell.debug_color, maxf(0.35, config.area_radius), primary_element, vfx_seed)
 	if "delayed_echo" in config.behavior_tags and raid != null and raid.has_method("schedule_spell_echo"):
-		raid.schedule_spell_echo(config, at)
+		raid.schedule_spell_echo(caster, config, at)
 	projectile_resolved.emit(network_magic_id, "impact")
 	queue_free()
 
@@ -213,7 +215,7 @@ func _redirect_after_ricochet() -> void:
 func _nearest_unhit_enemy(around: Vector3, radius: float) -> Node3D:
 	var best: Node3D
 	var best_distance: float = radius
-	for node: Node in get_tree().get_nodes_in_group("enemies"):
+	for node: Node in _attack_targets():
 		if not node is Node3D or hit_target_ids.has(node.get_instance_id()):
 			continue
 		var distance: float = (node as Node3D).global_position.distance_to(around)
@@ -221,6 +223,28 @@ func _nearest_unhit_enemy(around: Vector3, radius: float) -> Node3D:
 			best = node as Node3D
 			best_distance = distance
 	return best
+
+
+func _attack_targets() -> Array[Node]:
+	var raid := _raid_scene()
+	if source_team == "player" and raid != null and raid.has_method("get_player_attack_targets"):
+		return raid.get_player_attack_targets(caster)
+	if source_team == "enemy" and raid != null and raid.has_method("get_enemy_attack_targets"):
+		return raid.get_enemy_attack_targets()
+	var targets: Array[Node] = []
+	var group_name := "enemies" if source_team == "player" else "player"
+	for target: Node in get_tree().get_nodes_in_group(group_name):
+		if target != caster:
+			targets.append(target)
+	return targets
+
+
+func _is_player_attack_target(body: Node3D) -> bool:
+	if body == caster:
+		return false
+	if not body.is_in_group("enemies") and not body.is_in_group("player"):
+		return false
+	return body in _attack_targets()
 
 func _apply_presentation() -> void:
 	if config == null or config.base_spell == null or spell_mesh == null:

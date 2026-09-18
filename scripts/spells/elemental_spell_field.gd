@@ -60,7 +60,9 @@ func _physics_process(delta: float) -> void:
 func _apply_tick() -> void:
 	if config.behavior_type in ["wall", "barrier"]:
 		return
-	for target: Node in get_tree().get_nodes_in_group("enemies"):
+	var raid := _raid_scene()
+	var targets: Array[Node] = raid.get_player_attack_targets(caster) if raid != null and raid.has_method("get_player_attack_targets") else get_tree().get_nodes_in_group("enemies")
+	for target: Node in targets:
 		if not target is Node3D:
 			continue
 		var offset: Vector3 = (target as Node3D).global_position - global_position
@@ -71,7 +73,6 @@ func _apply_tick() -> void:
 			if not detonated:
 				detonated = true
 				_damage_target(target, config.damage_or_healing)
-				var raid: Node = _raid_scene()
 				if raid != null:
 					raid.spawn_spell_impact(global_position, config.base_spell.debug_color, config.area_radius, config.base_spell.primary_element, 9.0)
 				queue_free()
