@@ -1800,6 +1800,19 @@ func extract_network_player(peer_id: int, extraction_name: String) -> bool:
 	if extraction_name != "abandoned" and not _can_extract_network_player(network_player, extraction_name):
 		print("[RAID] rejected extraction peer=%d reason=outside_zone" % peer_id)
 		return false
+	var raid_inventory := _network_inventory(peer_id)
+	var secure_inventory := _network_secure_inventory(peer_id)
+	var success := extraction_name != "abandoned"
+	var profile_saved := NetworkManager.server_apply_raid_result(
+		peer_id,
+		success,
+		network_player.authoritative_loadout,
+		network_player.authoritative_spell_pages,
+		raid_inventory,
+		secure_inventory
+	)
+	if not profile_saved:
+		push_error("[PROFILE] raid result save failed peer=%d" % peer_id)
 	if extraction_name == "abandoned":
 		_drop_network_player_loot(peer_id, network_player)
 	network_players.erase(peer_id)

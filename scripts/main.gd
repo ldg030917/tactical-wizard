@@ -287,6 +287,9 @@ func _on_client_raid_completed(success: bool, server_result: Dictionary) -> void
 	if active_area is RaidScene:
 		var result_kills: Dictionary = server_result.get("kills", (active_area as RaidScene).kills)
 		var summary: Dictionary = GameState.finish_raid(success, result_kills, str(server_result.get("extraction", "")))
+		var profile_snapshot: Variant = server_result.get("profile_snapshot", {})
+		if profile_snapshot is Dictionary:
+			GameState.apply_server_profile_snapshot(profile_snapshot)
 		show_end_screen(summary)
 
 

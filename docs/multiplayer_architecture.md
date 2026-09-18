@@ -7,6 +7,7 @@ local Raid Scene world.
 ```text
 Client request
   -> NetworkManager (ENet/RPC routing)
+  -> PlayerProfileService (peer session -> persistent user profile)
   -> MatchmakingManager (queue and 2–4 player batching)
   -> SessionManager (session ID, members, load state, cleanup)
   -> Main local world host (instantiates the current RaidScene)
@@ -18,6 +19,16 @@ Client request
 - `NetworkManager`: connection lifecycle, peer registry, RPC validation/routing,
   and client-facing status messages. It does not own matchmaking queues or
   session data.
+- `PlayerIdentity`: client-only development UUID stored in
+  `user://player_identity.json`. It is an identity adapter, not secure
+  authentication; Steam/login can replace this boundary later.
+- `PlayerProfileService`: server-only `peer_id -> PlayerSession -> user_id ->
+  PlayerProfile` lookup and mutation boundary. A connected peer cannot enter
+  the lobby until identity registration and profile loading succeed. Duplicate
+  active `user_id` registrations are rejected.
+- `PlayerProfileStorage`: the current JSON repository implementation under
+  `user://player_profiles/<user_id>.json`. Gameplay code does not access files,
+  so a database-backed repository can replace it without changing raid code.
 - `MatchmakingManager`: queue membership and match selection only. When a batch
   is ready it emits `match_ready(members)`; it never instantiates a Raid Scene.
 - `SessionManager`: creates `raid_N` IDs, tracks player-to-session mapping,
@@ -52,6 +63,12 @@ fan-out select recipients through that session's member list. Enemies and
 projectiles live under that Raid Scene's runtime actor/effect roots, giving them
 the same local-world ownership as their players.
 
+Network authority still uses `peer_id`: RPC recipients, multiplayer authority,
+player nodes, matchmaking membership and RaidSession membership remain tied to
+the active ENet connection. Only persistent account data (stash, currency,
+loadout, runes and progression) is keyed by `user_id`. `peer_loadouts` is a
+detached runtime raid-spawn cache, not persistent storage.
+
 ## Leave paths
 
 - Extraction: Raid gameplay asks `NetworkManager`; it routes to
@@ -59,4 +76,5 @@ the same local-world ownership as their players.
   its personal lobby, and leaves other session members active.
 - Disconnect: `NetworkManager` removes the peer from matchmaking and then asks
   `SessionManager` to remove it from its session. An empty session is closed in
-  `SessionManager`; the queue itself remains available.
+  `SessionManager`; the queue itself remains available. The profile service
+  saves the user's profile and removes both identity/session mappings.

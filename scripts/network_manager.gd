@@ -23,7 +23,7 @@ const DEFAULT_SERVER_ADDRESS := "158.180.84.54"
 const MAX_CLIENTS := 32
 const PING_INTERVAL_SECONDS := 1.0
 
-enum PeerRaidState { MULTIPLAYER_LOBBY, MATCHMAKING, MATCHED_WAITING_WORLD, LOADING_RAID, IN_RAID, RETURNING_TO_LOBBY, DISCONNECTED }
+enum PeerRaidState { MULTIPLAYER_LOBBY, MATCHMAKING, MATCHED_WAITING_WORLD, LOADING_RAID, IN_RAID, RETURNING_TO_LOBBY, DISCONNECTED, IDENTITY_PENDING }
 
 var is_server_mode := false
 var is_connecting := false
@@ -149,10 +149,7 @@ func submit_local_loadout() -> void:
 	_submit_loadout.rpc_id(1, {
 		"loadout": loadout,
 		"spell_pages": GameState.spell_pages.duplicate(true),
-		"selected_character_id": GameState.selected_character_id,
-		"skills": GameState.skills.duplicate(true),
-		"stash": GameState.stash.duplicate(true),
-		"currency": GameState.currency
+		"selected_character_id": GameState.selected_character_id
 	})
 
 
@@ -166,10 +163,15 @@ func update_peer_profile(peer_id: int, profile: Dictionary) -> void:
 
 
 func server_sync_client_profile(peer_id: int, raid_inventory: Dictionary) -> void:
-	if not multiplayer.is_server() or not peer_loadouts.has(peer_id):
+	if not multiplayer.is_server() or not PlayerProfileService.has_session(peer_id):
 		return
-	var profile: Dictionary = peer_loadouts[peer_id]
-	_sync_client_profile.rpc_id(peer_id, int(profile.get("currency", 0)), profile.get("stash", {}), raid_inventory)
+	_sync_client_profile.rpc_id(peer_id, PlayerProfileService.profile_snapshot_for_peer(peer_id), raid_inventory)
+
+
+func server_apply_raid_result(peer_id: int, success: bool, authoritative_loadout: Dictionary, authoritative_pages: Array, raid_inventory: Dictionary, secure_inventory: Dictionary) -> bool:
+	if not multiplayer.is_server() or not PlayerProfileService.has_session(peer_id):
+		return false
+	return PlayerProfileService.apply_raid_result(peer_id, success, authoritative_loadout, authoritative_pages, raid_inventory, secure_inventory)
 
 
 func is_region_transitioning(session_id: String) -> bool:
@@ -225,13 +227,16 @@ func server_complete_raid_extraction(peer_id: int, success: bool = true, result:
 		return
 	print("[RAID %s] completed peer=%d success=%s" % [session_id, peer_id, str(success)])
 	SessionManager.remove_player(peer_id, "extracted")
+	PlayerProfileService.set_raid_session(peer_id, "")
 	peer_raid_states[peer_id] = PeerRaidState.RETURNING_TO_LOBBY
-	_raid_completed_on_client.rpc_id(peer_id, success, result)
+	var authoritative_result := result.duplicate(true)
+	authoritative_result["profile_snapshot"] = PlayerProfileService.profile_snapshot_for_peer(peer_id)
+	_raid_completed_on_client.rpc_id(peer_id, success, authoritative_result)
 	peer_raid_states[peer_id] = PeerRaidState.MULTIPLAYER_LOBBY
 
 
 func _queue_peer(peer_id: int) -> void:
-	if not connected_peer_ids.has(peer_id) or int(peer_raid_states.get(peer_id, PeerRaidState.DISCONNECTED)) != PeerRaidState.MULTIPLAYER_LOBBY:
+	if not connected_peer_ids.has(peer_id) or not PlayerProfileService.has_session(peer_id) or int(peer_raid_states.get(peer_id, PeerRaidState.DISCONNECTED)) != PeerRaidState.MULTIPLAYER_LOBBY:
 		return
 	if not peer_loadouts.has(peer_id):
 		_send_matchmaking_status(peer_id, "LOADOUT SYNCING")
@@ -267,6 +272,7 @@ func _create_raid_session(requested_members: Array[int], is_test_session: bool) 
 	var session := SessionManager.get_session(session_id)
 	var starts_now := int(session.get("state", SessionManager.State.CLOSED)) == SessionManager.State.PREPARING_WORLD
 	for peer_id: int in members:
+		PlayerProfileService.set_raid_session(peer_id, session_id)
 		peer_raid_states[peer_id] = PeerRaidState.LOADING_RAID if starts_now else PeerRaidState.MATCHED_WAITING_WORLD
 		_send_matchmaking_status(peer_id, "MATCH FOUND  %d Players" % members.size())
 	if starts_now:
@@ -333,7 +339,8 @@ func _stop_current_peer() -> void:
 func _on_peer_connected(peer_id: int) -> void:
 	if is_server_mode:
 		connected_peer_ids[peer_id] = true
-		peer_raid_states[peer_id] = PeerRaidState.MULTIPLAYER_LOBBY
+		peer_raid_states[peer_id] = PeerRaidState.IDENTITY_PENDING
+		print("[IDENTITY] awaiting user_id peer=%d" % peer_id)
 		print("[NETWORK] peer_connected=%d peers=%s" % [peer_id, str(connected_peer_ids.keys())])
 
 
@@ -342,6 +349,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		return
 	var session_id := get_peer_session_id(peer_id)
 	_cancel_queued_peer(peer_id, "disconnected")
+	PlayerProfileService.remove_peer(peer_id)
 	connected_peer_ids.erase(peer_id)
 	peer_loadouts.erase(peer_id)
 	if not session_id.is_empty():
@@ -354,10 +362,9 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 func _on_connected_to_server() -> void:
 	is_connecting = false
-	connection_status_changed.emit("Connected to server.")
-	session_state_changed.emit("ONLINE")
-	submit_local_loadout()
-	client_connected.emit()
+	connection_status_changed.emit("Connected. Registering development identity...")
+	session_state_changed.emit("IDENTIFYING")
+	_submit_identity.rpc_id(1, PlayerIdentity.user_id)
 
 
 func _on_connection_failed() -> void:
@@ -377,9 +384,52 @@ func _on_server_disconnected() -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
+func _submit_identity(user_id: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var peer_id := multiplayer.get_remote_sender_id()
+	if not connected_peer_ids.has(peer_id) or int(peer_raid_states.get(peer_id, -1)) != PeerRaidState.IDENTITY_PENDING:
+		return
+	var registration: Dictionary = PlayerProfileService.register_peer(peer_id, user_id)
+	if not bool(registration.get("ok", false)):
+		var reason := str(registration.get("reason", "identity_rejected"))
+		print("[IDENTITY] rejected peer=%d reason=%s" % [peer_id, reason])
+		_identity_rejected.rpc_id(peer_id, reason)
+		return
+	peer_raid_states[peer_id] = PeerRaidState.MULTIPLAYER_LOBBY
+	peer_loadouts[peer_id] = PlayerProfileService.gameplay_profile_for_peer(peer_id)
+	print("[IDENTITY] accepted peer=%d user_id=%s" % [peer_id, user_id])
+	_identity_accepted.rpc_id(peer_id, PlayerProfileService.profile_snapshot_for_peer(peer_id))
+
+
+@rpc("authority", "call_remote", "reliable")
+func _identity_accepted(profile_snapshot: Dictionary) -> void:
+	if not is_connected_to_server():
+		return
+	GameState.apply_server_profile_snapshot(profile_snapshot)
+	connection_status_changed.emit("Connected to server.")
+	session_state_changed.emit("ONLINE")
+	submit_local_loadout()
+	client_connected.emit()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _identity_rejected(reason: String) -> void:
+	if not is_connected_to_server():
+		return
+	var message := "Identity rejected by server: %s" % reason
+	connection_status_changed.emit(message)
+	session_state_changed.emit("OFFLINE")
+	client_connection_failed.emit(message)
+	_stop_current_peer()
+
+
+@rpc("any_peer", "call_remote", "reliable")
 func _request_matchmaking() -> void:
 	if multiplayer.is_server():
-		_queue_peer(multiplayer.get_remote_sender_id())
+		var peer_id := multiplayer.get_remote_sender_id()
+		if PlayerProfileService.has_session(peer_id):
+			_queue_peer(peer_id)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -387,14 +437,22 @@ func _submit_loadout(snapshot: Dictionary) -> void:
 	if not multiplayer.is_server():
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
-	if not connected_peer_ids.has(peer_id):
+	if not connected_peer_ids.has(peer_id) or not PlayerProfileService.has_session(peer_id):
 		return
 	var normalized := _normalize_loadout_snapshot(snapshot)
 	if normalized.is_empty():
 		print("[LOADOUT] rejected peer=%d" % peer_id)
 		return
-	peer_loadouts[peer_id] = normalized
-	print("[LOADOUT] accepted peer=%d pages=%s" % [peer_id, str(normalized.spell_pages)])
+	var result: Dictionary = PlayerProfileService.apply_loadout_selection(peer_id, normalized)
+	if not bool(result.get("ok", false)):
+		print("[LOADOUT] rejected peer=%d reason=%s item=%s" % [peer_id, str(result.get("reason", "unknown")), str(result.get("item_id", ""))])
+		_sync_client_profile.rpc_id(peer_id, PlayerProfileService.profile_snapshot_for_peer(peer_id), {})
+		return
+	var previous_regions: Array = peer_loadouts.get(peer_id, {}).get("visited_regions", ["neutral_frontier"]).duplicate()
+	peer_loadouts[peer_id] = result.get("gameplay_profile", {}).duplicate(true)
+	peer_loadouts[peer_id]["visited_regions"] = previous_regions
+	_sync_client_profile.rpc_id(peer_id, result.get("snapshot", {}), {})
+	print("[LOADOUT] accepted peer=%d pages=%s source=server_profile" % [peer_id, str(normalized.spell_pages)])
 
 
 func _normalize_loadout_snapshot(snapshot: Dictionary) -> Dictionary:
@@ -402,10 +460,20 @@ func _normalize_loadout_snapshot(snapshot: Dictionary) -> Dictionary:
 	var raw_pages: Variant = snapshot.get("spell_pages", [])
 	if not raw_loadout is Dictionary or not raw_pages is Array or raw_pages.size() != 3:
 		return {}
-	var loadout: Dictionary = raw_loadout.duplicate(true)
-	for slot: String in ["spellbook", "focus", "dagger", "head", "chest", "accessory_1", "accessory_2", "backpack", "consumable_1", "consumable_2"]:
-		if not loadout.has(slot):
-			loadout[slot] = ""
+	var accepted_categories := {
+		"spellbook":["spellbook"], "focus":["focus"], "dagger":["dagger", "melee"],
+		"head":["armor_head"], "chest":["armor_chest", "armor"],
+		"accessory_1":["accessory"], "accessory_2":["accessory"], "backpack":["backpack"],
+		"consumable_1":["medical", "mana_consumable"], "consumable_2":["medical", "mana_consumable"]
+	}
+	var loadout: Dictionary = {}
+	for slot: String in accepted_categories:
+		var selected_item := str((raw_loadout as Dictionary).get(slot, ""))
+		if not selected_item.is_empty():
+			var item_info := ItemDB.get_item(selected_item)
+			if item_info.is_empty() or str(item_info.get("category", "")) not in accepted_categories[slot]:
+				return {}
+		loadout[slot] = selected_item
 	var pages: Array = []
 	var book := ItemDB.spellbook(str(loadout.get("spellbook", "")))
 	for raw_page: Variant in raw_pages:
@@ -429,29 +497,17 @@ func _normalize_loadout_snapshot(snapshot: Dictionary) -> Dictionary:
 	var character_id := str(snapshot.get("selected_character_id", "mana_specialist"))
 	if not ContentRegistry.characters().has(character_id):
 		return {}
-	var skills: Dictionary = {}
-	var raw_skills: Variant = snapshot.get("skills", {})
-	if raw_skills is Dictionary:
-		for skill_id: String in ContentRegistry.skills().keys():
-			var skill := ContentRegistry.skills().get(skill_id) as SkillData
-			skills[skill_id] = clampi(int(raw_skills.get(skill_id, 0)), 0, skill.maximum_rank if skill != null else 0)
-	var stash: Dictionary = {}
-	var raw_stash: Variant = snapshot.get("stash", {})
-	if raw_stash is Dictionary:
-		for item_id: String in raw_stash.keys():
-			if not ItemDB.get_item(item_id).is_empty():
-				stash[item_id] = maxi(0, int(raw_stash[item_id]))
 	return {
-		"loadout": loadout, "spell_pages": pages, "selected_character_id": character_id,
-		"skills": skills, "stash": stash, "currency": maxi(0, int(snapshot.get("currency", 0))),
-		"visited_regions":["neutral_frontier"]
+		"loadout": loadout, "spell_pages": pages, "selected_character_id": character_id
 	}
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func _cancel_matchmaking() -> void:
 	if multiplayer.is_server():
-		_cancel_queued_peer(multiplayer.get_remote_sender_id())
+		var peer_id := multiplayer.get_remote_sender_id()
+		if PlayerProfileService.has_session(peer_id):
+			_cancel_queued_peer(peer_id)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -459,7 +515,7 @@ func _request_test_raid() -> void:
 	if not multiplayer.is_server():
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
-	if connected_peer_ids.has(peer_id) and int(peer_raid_states.get(peer_id, -1)) == PeerRaidState.MULTIPLAYER_LOBBY:
+	if connected_peer_ids.has(peer_id) and PlayerProfileService.has_session(peer_id) and int(peer_raid_states.get(peer_id, -1)) == PeerRaidState.MULTIPLAYER_LOBBY:
 		_create_raid_session([peer_id], true)
 
 
@@ -488,7 +544,7 @@ func _request_raid_extraction(extraction_name: String) -> void:
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	var session_id := get_peer_session_id(peer_id)
-	if not session_id.is_empty() and int(peer_raid_states.get(peer_id, -1)) == PeerRaidState.IN_RAID:
+	if PlayerProfileService.has_session(peer_id) and not session_id.is_empty() and int(peer_raid_states.get(peer_id, -1)) == PeerRaidState.IN_RAID:
 		raid_extraction_requested.emit(peer_id, extraction_name, session_id)
 
 
@@ -558,11 +614,8 @@ func _pong_client(sent_at_ms: int) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func _sync_client_profile(currency: int, stash: Dictionary, raid_inventory: Dictionary) -> void:
+func _sync_client_profile(profile_snapshot: Dictionary, raid_inventory: Dictionary) -> void:
 	if not is_connected_to_server():
 		return
-	GameState.currency = currency
-	GameState.stash = stash.duplicate(true)
+	GameState.apply_server_profile_snapshot(profile_snapshot)
 	GameState.raid_inventory = raid_inventory.duplicate(true)
-	GameState.save_game()
-	GameState.state_changed.emit()

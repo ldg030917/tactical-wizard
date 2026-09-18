@@ -29,6 +29,8 @@ const STARTING_MODIFIER_ITEM_IDS: Array[String] = [
 
 var stash: Dictionary = {}
 var currency: int = 0
+var display_name: String = "Player"
+var learned_runes: Array = []
 var loadout: Dictionary = {}
 var spell_pages: Array = []
 var attachments: Dictionary = {}
@@ -55,6 +57,8 @@ func _ready() -> void:
 
 func _default_data() -> Dictionary:
 	return {
+		"display_name":"Player",
+		"learned_runes":[],
 		"stash": {
 			"health_potion":2, "mana_potion":2, "fireball_page":1, "ice_spear_page":1,
 			"healing_circle_page":1, "water_bolt_page":1, "thorn_shot_page":1, "arcane_bolt_page":1,
@@ -125,6 +129,8 @@ func load_game() -> void:
 						data[key] = parsed[key]
 	stash = data.stash.duplicate(true)
 	currency = int(data.currency)
+	display_name = str(data.get("display_name", "Player"))
+	learned_runes = data.get("learned_runes", []).duplicate(true) if data.get("learned_runes", []) is Array else []
 	loadout = data.loadout.duplicate(true)
 	spell_pages = data.spell_pages.duplicate(true)
 	attachments = data.attachments.duplicate(true)
@@ -172,6 +178,7 @@ func _sanitize_data() -> void:
 
 func save_game() -> void:
 	var data := {
+		"display_name":display_name, "learned_runes":learned_runes,
 		"stash":stash, "currency":currency, "loadout":loadout, "spell_pages":spell_pages,
 		"attachments":attachments, "base_upgrades":base_upgrades, "skills":skills,
 		"skill_points":skill_points, "quests":quests,
@@ -186,6 +193,8 @@ func reset_save_for_debug() -> void:
 	var data := _default_data()
 	stash = data.stash.duplicate(true)
 	currency = int(data.currency)
+	display_name = str(data.display_name)
+	learned_runes = data.learned_runes.duplicate(true)
 	loadout = data.loadout.duplicate(true)
 	spell_pages = data.spell_pages.duplicate(true)
 	attachments = {}
@@ -195,6 +204,32 @@ func reset_save_for_debug() -> void:
 	quests = data.quests.duplicate(true)
 	selected_character_id = str(data.selected_character_id)
 	spell_catalog_version = int(data.spell_catalog_version)
+	save_game()
+	state_changed.emit()
+	spellbook_changed.emit()
+
+
+func default_profile_data() -> Dictionary:
+	return _default_data().duplicate(true)
+
+
+func apply_server_profile_snapshot(snapshot: Dictionary) -> void:
+	if snapshot.is_empty():
+		return
+	display_name = str(snapshot.get("display_name", display_name))
+	learned_runes = snapshot.get("learned_runes", learned_runes).duplicate(true) if snapshot.get("learned_runes", learned_runes) is Array else []
+	currency = maxi(0, int(snapshot.get("currency", currency)))
+	stash = snapshot.get("stash", stash).duplicate(true) if snapshot.get("stash", stash) is Dictionary else {}
+	loadout = snapshot.get("loadout", loadout).duplicate(true) if snapshot.get("loadout", loadout) is Dictionary else {}
+	spell_pages = snapshot.get("spell_pages", spell_pages).duplicate(true) if snapshot.get("spell_pages", spell_pages) is Array else []
+	attachments = snapshot.get("attachments", attachments).duplicate(true) if snapshot.get("attachments", attachments) is Dictionary else {}
+	base_upgrades = snapshot.get("base_upgrades", base_upgrades).duplicate(true) if snapshot.get("base_upgrades", base_upgrades) is Dictionary else {}
+	skills = snapshot.get("skills", skills).duplicate(true) if snapshot.get("skills", skills) is Dictionary else {}
+	skill_points = maxi(0, int(snapshot.get("skill_points", skill_points)))
+	quests = snapshot.get("quests", quests).duplicate(true) if snapshot.get("quests", quests) is Array else []
+	selected_character_id = str(snapshot.get("selected_character_id", selected_character_id))
+	spell_catalog_version = maxi(0, int(snapshot.get("spell_catalog_version", spell_catalog_version)))
+	_sanitize_data()
 	save_game()
 	state_changed.emit()
 	spellbook_changed.emit()
